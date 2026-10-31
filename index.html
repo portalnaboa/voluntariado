@@ -1,0 +1,2580 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>NABOA - Jogo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --pink: #e64771;
+            --green: #138377;
+        }
+
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+            overscroll-behavior: none;
+        }
+
+        body {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100vw;
+            height: 100svh;
+            min-height: 100svh;
+            max-height: 100svh;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Montserrat', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+            touch-action: manipulation;
+        }
+
+        /* VIEWPORT FINAL BLINDADO
+           Base lógica fixa: 390 x 693.333.
+           O jogo nunca cresce acima desse tamanho.
+           Em telas menores, reduz proporcionalmente apenas para caber inteiro. */
+        #game-container {
+            width: 390px;
+            min-width: 390px;
+            max-width: 390px;
+            height: 693.333px;
+            min-height: 693.333px;
+            max-height: 693.333px;
+            position: relative;
+            flex: 0 0 auto;
+            background-color: #000;
+            overflow: hidden;
+            box-shadow: 0 0 40px rgba(0,0,0,0.8);
+            transform-origin: center center;
+            transform: scale(var(--naboa-viewport-scale, 1));
+            will-change: transform;
+            contain: layout paint;
+        }
+
+        .bg-layer {
+            position: absolute;
+            inset: 0;
+            background-size: cover;
+            background-position: center;
+            transition: opacity 0.72s ease-in-out;
+            opacity: 0;
+        }
+        
+        .bg-layer.active { opacity: 1; }
+
+        #marker {
+            transform: translate(-50%, -100%);
+            will-change: left, top;
+        }
+
+        .perspective-1000 { perspective: 1000px; }
+        .transform-style-3d { transform-style: preserve-3d; }
+        .backface-hidden {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+        
+        .glass-card {
+            background: rgba(19, 131, 119, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 28px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            color: white;
+            padding: 5% 6%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #scrim { transition: all 0.65s ease-out; }
+        
+        #card-container {
+            --cal-text-scale: 1;
+            transition: all 0.65s ease-out;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(20px) scale(0.98);
+        }
+        
+        #card-container.active {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0) scale(1);
+        }
+
+        /* Layout especial para as respostas do NPC 9 (Ajustado topo e esquerda) */
+        #card-container.npc9-layout {
+            left: var(--npc9-left, 52%) !important;
+            top: var(--npc9-top, 12%) !important;
+            width: var(--npc9-width, 86%) !important;
+            height: var(--npc9-height, 82%) !important;
+            margin-left: var(--npc9-margin-left, -43%) !important;
+        }
+        #card-container.npc9-layout .glass-card { padding: 4% 5%; }
+        #card-container.npc9-layout .multi-grid {
+            grid-template-columns: 1fr;
+            gap: 3px;
+            max-height: 230px;
+            overflow-y: hidden;
+        }
+        #card-container.npc9-layout .multi-item {
+            padding: 4px 6px;
+            font-size: 12px;
+            text-align: left;
+        }
+        #card-container.npc9-layout .btn-confirm {
+            margin-top: 8px;
+            position: relative;
+            bottom: auto;
+        }
+
+        .btn-arrow {
+            background-color: var(--pink);
+            color: white;
+            border-radius: 50%;
+            width: 42px;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(230, 71, 113, 0.4);
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.2s;
+            margin-top: auto;
+            align-self: center;
+            flex-shrink: 0;
+        }
+        .btn-arrow:active { transform: scale(0.9); }
+        .btn-arrow svg { width: 22px; height: 22px; fill: currentColor; }
+
+        .btn-answer {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            padding: 4px 7px;
+            text-align: left;
+            margin-bottom: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 12px;
+            line-height: 1.2;
+        }
+        .btn-answer.selected {
+            background: rgba(230, 71, 113, 0.9);
+            border-color: var(--pink);
+            box-shadow: 0 0 10px rgba(230, 71, 113, 0.4);
+        }
+
+        .btn-confirm {
+            background: var(--pink);
+            border-radius: 20px;
+            padding: 7px 20px;
+            font-weight: 700;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(230, 71, 113, 0.4);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            margin-top: 6px;
+            align-self: center;
+            cursor: pointer;
+        }
+        .btn-confirm.visible { opacity: 1; pointer-events: auto; }
+
+        .token-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 12px; }
+        .token-btn-v { width: 18px; height: 12px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; border-radius: 3px; }
+        .token-btn-v:active { background: rgba(255,255,255,0.5); color: var(--pink); }
+
+        .slider-row { margin-bottom: 5px; font-size: 12px; }
+        .custom-range { -webkit-appearance: none; width: 100%; height: 5px; background: rgba(255,255,255,0.3); border-radius: 3px; outline: none; margin-top: 3px;}
+        .custom-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--pink); cursor: pointer; }
+
+        .sort-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.1); padding: 3px 5px; border-radius: 6px; margin-bottom: 3px; font-size: 12px; }
+        .sort-controls { display: flex; gap: 2px; flex-direction: column; }
+        .sort-btn { background: rgba(255,255,255,0.2); border-radius: 3px; padding: 1px 5px; font-size: 12px; cursor: pointer; }
+
+        .multi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+        .multi-item { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; padding: 4px; font-size: 12px; text-align: center; cursor: pointer; }
+        .multi-item.selected { background: var(--pink); border-color: var(--pink); }
+
+        /* Portas Estilo 16-bit */
+        .door-container { display: flex; gap: 8px; justify-content: center; margin-top: 6px; }
+        .door-card {
+            background: linear-gradient(135deg, #1b4d4f 0%, #0d292b 100%);
+            border: 2px solid #56c2c7;
+            border-radius: 10px;
+            padding: 10px 6px;
+            text-align: center;
+            cursor: pointer;
+            flex: 1;
+            transition: all 0.2s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .door-card.selected { border-color: var(--pink); background: linear-gradient(135deg, #7a2641 0%, #3d1020 100%); transform: scale(1.03); }
+        .door-title { font-size: 12px; font-weight: 800; color: #56c2c7; text-transform: uppercase; margin-bottom: 4px; }
+        .door-desc { font-size: 12px; line-height: 1.2; color: #ddd; }
+
+        .npc-sprite {
+            position: absolute;
+            transition: left 1.2s cubic-bezier(0.25, 1, 0.5, 1), 
+                        top 1.2s cubic-bezier(0.25, 1, 0.5, 1), 
+                        width 1.2s cubic-bezier(0.25, 1, 0.5, 1), 
+                        transform 1.2s cubic-bezier(0.25, 1, 0.5, 1),
+                        opacity 1.2s ease-out;
+            will-change: left, top, width, transform, opacity;
+            bottom: -5%; 
+        }
+
+        @keyframes npcIdle {
+            0%, 100% { transform: translate(-50%, 0) translateX(-1px) rotate(-0.2deg) scaleY(1); }
+            50%      { transform: translate(-50%, 0) translateX(1px) rotate(0.25deg) scaleY(1.004); }
+        }
+
+        .idle-anim { animation: npcIdle 4.2s infinite ease-in-out; transform-origin: bottom center; }
+        .item-idle-anim { animation: itemIdle 4.2s infinite ease-in-out; }
+
+        .npc-shadow {
+            position: absolute;
+            background: rgba(0,0,0,0.3);
+            border-radius: 50%;
+            height: 14px;
+            filter: blur(8px);
+            bottom: 0;
+            left: 50%;
+            transform: translate(-50%, 50%);
+            transition: all 1.2s cubic-bezier(0.25, 1, 0.5, 1);
+            opacity: 0;
+            z-index: -1;
+        }
+
+        .type-content {
+            flex-grow: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .question-text { font-size: 14px; line-height: 1.3; font-weight: 500; }
+        .comment-text { font-size: 14px; line-height: 1.3; }
+        
+        .fade-in { animation: fadeIn 0.4s forwards; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- TELAS FINAIS DE RESULTADO --- */
+        #result-screen {
+            background: rgba(5,15,16,0.98);
+            z-index: 100;
+        }
+        #loading-state, #links-state {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            padding: 8% 6%;
+        }
+
+        /* Tela "Você colocou mais peso em":
+           todo o bloco superior começa na antiga altura do loading.
+           CONTINUAR continua ancorado embaixo pelo margin-top:auto. */
+        #loading-state {
+            padding-top: calc(8% + 43px);
+        }
+
+        .analysisLead { font-size: 13px; font-weight: 700; line-height: 1.3; margin-bottom: 8px; min-height: 35px; color: white; text-align: center; }
+        
+        .loadingTrack { width: 100%; height: 7px; border-radius: 999px; background: rgba(255,255,255,0.12); margin-bottom: 10px; overflow: hidden; flex-shrink: 0; }
+        .loadingBar { height: 100%; width: 0%; background: white; transition: width 0.1s linear; }
+
+        .affinityLabels { display: flex; justify-content: center; gap: 8px; margin-bottom: 24px; opacity: 0; transition: opacity 0.3s; }
+        .affinityLabels span { font-size: 10px; font-weight: 800; padding: 5px 8px; border-radius: 6px; color: white; }
+        .affinityLabels .plus { background: rgba(19, 131, 119, 0.82); }
+        .affinityLabels .minus { background: rgba(230, 71, 113, 0.82); }
+
+        #tagCloud {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            justify-content: center;
+            align-content: flex-start;
+            align-self: center;
+            width: fit-content;
+            max-width: 100%;
+            overflow: hidden;
+            margin-top: 24px;
+            margin-left: auto;
+            margin-right: auto;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .tag { font-size: 9.5px; padding: 3px 6px; border-radius: 5px; background: rgba(255,255,255,0.03); opacity: 0.1; transition: all 0.3s; color: white; }
+        
+        .tag.hash-plus { opacity: 1; background: rgba(19, 131, 119, 0.85); box-shadow: 0 0 6px rgba(19, 131, 119, 0.5); font-weight: bold; transform: scale(1.05); }
+        .tag.hash-minus { opacity: 1; background: rgba(230, 71, 113, 0.85); box-shadow: 0 0 6px rgba(230, 71, 113, 0.5); font-weight: bold; transform: scale(1.05); }
+        .tag.hash-dim { opacity: 0.05; }
+
+        #btn-continue-final {
+            margin-top: auto;
+            align-self: center;
+            background: var(--pink);
+            color: white;
+            border-radius: 20px;
+            padding: 10px 22px;
+            font-weight: bold;
+            font-size: 11px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s, transform 0.4s;
+            transform: translateY(10px);
+        }
+        #btn-continue-final.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+
+        /* Estado 2 do Resultado */
+        .resultEyebrow { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.7; margin-bottom: 6px; font-weight: bold; text-align: center; color: white; }
+        #links-state h2 { font-size: 13px; margin-bottom: 6px; text-align: center; color: white; }
+        #links-state p { font-size: 12px; margin-bottom: 15px; text-align: center; color: white; opacity: 0.9; }
+
+        .causeCard {
+            border: 1px solid rgba(255,255,255,0.2);
+            background: linear-gradient(180deg, rgba(19, 131, 119, 0.6), rgba(19, 131, 119, 0.3));
+            border-radius: 16px;
+            padding: 14px;
+            margin-bottom: 15px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .causeCard small { font-size: 9.5px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px; color: white;}
+        .causeCard strong { font-size: 15px; font-weight: bold; color: white; }
+
+        .finalButtons { display: flex; flex-direction: column; gap: 8px; }
+        .finalButtons button { border-radius: 20px; padding: 12px; font-weight: bold; font-size: 11.5px; cursor: pointer; border: none; transition: transform 0.1s, opacity 0.3s; }
+        .finalButtons button:active { transform: scale(0.98); }
+        .bonusBtn { background: var(--pink); color: white; }
+        .causeBtn { background: var(--green); color: white; opacity: 0.4; pointer-events: none; }
+        .causeBtn.enabled { opacity: 1; pointer-events: auto; }
+        .bonusStatus { font-size: 9.5px; text-align: center; color: white; opacity: 0.7; margin-top: 8px; min-height: 15px;}
+
+        /* Botão Refazer discreto no canto inferior esquerdo */
+        #btn-restart {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            width: 34px;
+            height: 34px;
+            padding: 0;
+            border-radius: 50%;
+            font-size: 0;
+            justify-content: center;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 120;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            backdrop-filter: blur(4px);
+        }
+        #btn-restart:active { background: rgba(255,255,255,0.3); }
+
+        /* --- ABERTURA EM DUAS TELAS --- */
+        #intro-screen {
+            position: absolute;
+            inset: 0;
+            z-index: 200;
+            background: #000;
+            overflow: hidden;
+            cursor: default;
+            transition: opacity 0.8s ease-in-out;
+        }
+        #intro-screen.ready { cursor: pointer; }
+        #intro-screen.leaving { opacity: 0; pointer-events: none; }
+        #intro-video,
+        #intro-video-2 {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+            background: #000;
+        }
+        #intro-video { z-index: 2; }
+        #intro-video-2 {
+            z-index: 1;
+            opacity: 1;
+        }
+        #intro-video.video-1-hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        #intro-credit {
+            position: absolute;
+            left: 50%;
+            bottom: 2.4%;
+            z-index: 3;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.82);
+            font-family: 'Montserrat', sans-serif;
+            font-size: 7px;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: lowercase;
+            white-space: nowrap;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.75);
+            pointer-events: none;
+            transition: opacity 0.18s ease;
+        }
+        #intro-video.video-1-hidden + #intro-credit { opacity: 0; }
+        #intro-click-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+            cursor: default;
+            background: transparent;
+            touch-action: manipulation;
+        }
+        #intro-screen.ready #intro-click-layer { cursor: pointer; }
+
+        /* --- INTRODUÇÃO NO START DO MAPA --- */
+        #start-intro-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 90;
+            opacity: 0;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.34);
+            backdrop-filter: blur(1.5px);
+            transition: opacity 0.75s ease-in-out;
+        }
+        #start-intro-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #start-intro-card {
+            position: absolute;
+            left: 50%;
+            top: 12.5%;
+            width: 82%;
+            min-height: 35%;
+            max-height: 45%;
+            transform: translate(-50%, 14px) scale(0.985);
+            opacity: 0;
+            transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+            padding: 6% 6%;
+            z-index: 2;
+        }
+        #start-intro-overlay.active #start-intro-card {
+            opacity: 1;
+            transform: translate(-50%, 0) scale(1);
+        }
+        #start-intro-text {
+            justify-content: center;
+            font-size: 14px;
+            line-height: 1.38;
+        }
+        #start-intro-action {
+            height: 42px;
+            margin-top: 8px;
+            display: flex;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        #start-intro-arrow {
+            opacity: 0;
+            pointer-events: none;
+            border: 0;
+            transition: opacity 0.35s ease, transform 0.2s ease;
+        }
+        #start-intro-arrow.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #start-intro-silvia {
+            position: absolute;
+            left: 50%;
+            bottom: 4%;
+            width: 93.6%;
+            height: auto;
+            max-height: 70.2%;
+            object-fit: contain;
+            object-position: center bottom;
+            transform: translate(-50%, 18px);
+            opacity: 0;
+            filter: drop-shadow(0 10px 18px rgba(0,0,0,0.28));
+            transition: opacity 0.85s ease-out 0.12s, transform 0.85s ease-out 0.12s;
+            z-index: 5;
+            pointer-events: none;
+        }
+        #start-intro-overlay.active #start-intro-silvia {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+        #start-intro-overlay.leaving {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* --- CONTROLE DE ÁUDIO --- */
+        #audio-control {
+            position: absolute;
+            top: 10px;
+            right: 12px;
+            z-index: 130;
+            display: none;
+            align-items: flex-start;
+            gap: 6px;
+            color: #fff;
+            font-family: 'Montserrat', sans-serif;
+        }
+        #audio-toggle {
+            width: 34px;
+            height: 34px;
+            border: 1px solid rgba(255,255,255,0.35);
+            border-radius: 50%;
+            background: rgba(0,0,0,0.38);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+        }
+        #audio-toggle svg { width: 18px; height: 18px; }
+        #audio-panel {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 6px;
+            min-height: 34px;
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 18px;
+            background: rgba(0,0,0,0.52);
+            backdrop-filter: blur(6px);
+            opacity: 0;
+            pointer-events: none;
+            transform: translateX(6px);
+            transition: opacity 0.18s ease, transform 0.18s ease;
+        }
+        #audio-panel.open {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateX(0);
+        }
+        .audio-mini-btn {
+            width: 25px;
+            height: 25px;
+            border: 0;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.13);
+            color: #fff;
+            font-size: 15px;
+            line-height: 1;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        #audio-stop { font-size: 11px; }
+        #volume-value {
+            width: 33px;
+            text-align: center;
+            font-size: 8px;
+            font-weight: 700;
+        }
+
+
+        /* --- MODO DE CALIBRAÇÃO (ative com ?calibrar=1) --- */
+        #calibration-toggle,
+        #calibration-panel { display: none; }
+        body.calibration-mode #calibration-toggle { display: block; }
+        #calibration-toggle {
+            position: absolute;
+            left: 8px;
+            bottom: 8px;
+            z-index: 500;
+            border: 1px solid rgba(255,255,255,0.35);
+            border-radius: 999px;
+            background: rgba(8,18,19,0.86);
+            color: #fff;
+            padding: 6px 9px;
+            font: 700 8px/1 'Montserrat', sans-serif;
+            letter-spacing: .06em;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+        }
+        body.calibration-mode #calibration-panel.open { display: block; }
+        #calibration-panel {
+            position: absolute;
+            left: 8px;
+            bottom: 38px;
+            z-index: 500;
+            width: min(78%, 270px);
+            padding: 10px;
+            border: 1px solid rgba(255,255,255,0.28);
+            border-radius: 12px;
+            background: rgba(5,15,16,0.94);
+            color: #fff;
+            font-family: 'Montserrat', sans-serif;
+            box-shadow: 0 8px 24px rgba(0,0,0,.45);
+            backdrop-filter: blur(8px);
+        }
+        #calibration-panel .cal-title { font-size: 10px; font-weight: 800; margin-bottom: 7px; }
+        #calibration-panel .cal-stage { color: #9edbd4; }
+        #calibration-panel .cal-row { margin: 7px 0; }
+        #calibration-panel .cal-label { display: flex; justify-content: space-between; gap: 8px; font-size: 8px; margin-bottom: 3px; }
+        #calibration-panel input[type="range"] { width: 100%; accent-color: var(--pink); }
+        #calibration-panel .cal-actions { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
+        #calibration-panel .cal-btn {
+            flex: 1 1 auto;
+            border: 1px solid rgba(255,255,255,.25);
+            border-radius: 8px;
+            background: rgba(255,255,255,.10);
+            color: #fff;
+            padding: 6px 7px;
+            font-size: 7.5px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        #calibration-panel .cal-hint { margin-top: 7px; font-size: 7px; line-height: 1.3; opacity: .7; }
+
+
+        /* PADRÃO FINAL INTERNO DO QUIZ. Não altera viewport, box externo ou NPC. */
+        #card-front, #card-back {
+            display: grid;
+            grid-template-rows: minmax(0, 1fr) 46px;
+            gap: 6px;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        #content-front, #content-back {
+            min-height: 0;
+            height: auto !important;
+            overflow: hidden !important;
+            overflow-y: hidden !important;
+            box-sizing: border-box;
+        }
+        #content-front { justify-content: center; }
+        #content-back { justify-content: flex-start !important; padding-top: 0 !important; }
+        #action-front, #action-back {
+            height: 46px !important;
+            min-height: 46px;
+            margin: 0 !important;
+            padding: 0 !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        #action-front > *, #action-back > * { scale: 1 !important; }
+
+        .question-text, .comment-text {
+            font-size: 14px !important;
+            line-height: 1.30 !important;
+        }
+        #start-intro-text {
+            font-size: 14px !important;
+            line-height: 1.30 !important;
+        }
+        #start-intro-card {
+            display: grid;
+            grid-template-rows: minmax(0, 1fr) 46px;
+            gap: 6px;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        #start-intro-text { min-height: 0; overflow: hidden !important; }
+        #start-intro-action {
+            height: 46px !important;
+            min-height: 46px;
+            margin: 0 !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        #start-intro-arrow { scale: 1 !important; }
+
+        .btn-answer,
+        .token-row, .token-row *,
+        .slider-row, .slider-row *,
+        .sort-item, .sort-item *,
+        .multi-item,
+        .door-title, .door-desc,
+        .quiz-answer-helper,
+        .quiz-swipe-text,
+        .quiz-swipe-option {
+            font-size: 12px !important;
+            line-height: 1.20 !important;
+        }
+
+        .btn-answer {
+            padding: 5px 7px;
+            margin-bottom: 4px;
+            min-height: 34px;
+            box-sizing: border-box;
+            white-space: normal;
+            overflow: hidden;
+        }
+        .token-row, .sort-item {
+            min-height: 34px;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        .slider-row {
+            min-height: 42px;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        .token-row > span:first-child,
+        .sort-item > span:first-child {
+            min-width: 0;
+            white-space: normal;
+            overflow: hidden;
+        }
+        .token-btn-v { width: 22px; height: 15px; flex-shrink: 0; }
+        .sort-controls { flex-shrink: 0; }
+        .sort-btn { min-width: 25px; }
+
+        .door-container {
+            width: 100%;
+            gap: 7px;
+            margin-top: 2px;
+            box-sizing: border-box;
+        }
+        .door-card {
+            min-width: 0;
+            min-height: 108px;
+            padding: 7px 6px;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        /* NPC9: 9 opções cabem sem rolagem. */
+        #card-container.npc9-layout .multi-grid,
+        .multi-grid {
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+            max-height: none;
+            overflow: hidden;
+            overflow-y: hidden;
+        }
+        #card-container.npc9-layout .multi-item,
+        .multi-item {
+            min-height: 40px;
+            padding: 5px 6px;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .quiz-swipe-text {
+            margin: 4px 0 12px;
+            padding: 6px 7px;
+            text-align: center;
+            font-weight: 700;
+            box-sizing: border-box;
+        }
+        .quiz-swipe-row { display: flex; gap: 6px; width: 100%; }
+        .quiz-swipe-option {
+            flex: 1 1 0;
+            min-width: 0;
+            min-height: 40px;
+            padding: 5px 4px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-weight: 700;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        .btn-confirm,
+        #card-container.npc9-layout .btn-confirm {
+            position: static;
+            bottom: auto;
+            height: 40px;
+            min-width: 46%;
+            margin: 0;
+            padding: 0 18px;
+            align-self: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            font-size: 14px !important;
+            line-height: 1 !important;
+        }
+        .btn-arrow { margin-top: 0; align-self: center; }
+
+
+        /* --- SAIR DO JOGO: visível da etapa 1 em diante --- */
+        #btn-exit-game {
+            position: absolute;
+            right: 15px;
+            bottom: 15px;
+            z-index: 145;
+            width: 34px;
+            height: 34px;
+            padding: 0;
+            border: 1px solid rgba(255,255,255,0.30);
+            border-radius: 50%;
+            background: rgba(0,0,0,0.34);
+            color: #fff;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.22);
+        }
+        #btn-exit-game.visible { display: flex; }
+        #btn-exit-game svg { width: 16px; height: 16px; pointer-events: none; }
+        #btn-exit-game:active { background: rgba(255,255,255,0.20); }
+
+        #exit-confirm-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 500;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            box-sizing: border-box;
+            background: rgba(0,0,0,0.68);
+            backdrop-filter: blur(3px);
+        }
+        #exit-confirm-overlay.open { display: flex; }
+
+        #exit-confirm-box {
+            width: 82%;
+            max-width: 310px;
+            box-sizing: border-box;
+            padding: 22px 18px 18px;
+            border: 1px solid rgba(255,255,255,0.32);
+            border-radius: 20px;
+            background: rgba(10,32,31,0.96);
+            color: #fff;
+            text-align: center;
+            box-shadow: 0 14px 36px rgba(0,0,0,0.42);
+        }
+        #exit-confirm-box p {
+            margin: 0 0 18px;
+            font-size: 14px;
+            line-height: 1.3;
+            font-weight: 700;
+        }
+        #exit-confirm-actions {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        #exit-confirm-actions button {
+            min-width: 92px;
+            height: 38px;
+            border: 0;
+            border-radius: 19px;
+            color: #fff;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        #exit-confirm-no { background: rgba(255,255,255,0.16); }
+        #exit-confirm-yes { background: var(--pink); }
+
+
+        /* GIF sobre a interrogação desenhada do cenário 4 */
+        #cenario4-interrogacao-gif {
+            position: absolute;
+            left: 66.28%;
+            top: 39.95%;
+            width: 18.9%;
+            height: auto;
+            transform: translate(-50%, -50%) rotate(0deg);
+            transform-origin: center;
+            pointer-events: none;
+            user-select: none;
+            z-index: 2;
+        }
+
+
+        /* Metrô contínuo no trilho do cenário 4 */
+        #metro-global {
+            position: absolute;
+            left: 0;
+            bottom: 1.8%;
+            width: 144%;
+            height: auto;
+            z-index: 1;
+            pointer-events: none;
+            user-select: none;
+            will-change: transform;
+            animation: metroGlobalPassando 9s linear infinite;
+        }
+
+        @keyframes metroGlobalPassando {
+            0%   { transform: translateX(-145%); }
+            100% { transform: translateX(155%); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- Abertura: vídeo 1 libera o clique após 5s; depois entra o vídeo 2 -->
+        <div id="intro-screen">
+            <!-- Vídeo 2 fica pré-carregado por baixo para a troca ser instantânea no clique. -->
+            <video id="intro-video-2" playsinline preload="auto">
+                <source src="https://naboa.eco.br/wp-content/uploads/2026/08/video-2.mp4" type="video/mp4">
+            </video>
+            <video id="intro-video" autoplay muted playsinline preload="auto">
+                <source src="https://naboa.eco.br/wp-content/uploads/2026/08/invdeo-abertura.mp4" type="video/mp4">
+            </video>
+            <div id="intro-credit">criado por maestria geo</div>
+            <!-- Camada transparente garante o clique sobre vídeos também em mobile/previews. -->
+            <div id="intro-click-layer" aria-label="Avançar abertura"></div>
+        </div>
+
+        <!-- Trilha do jogo: inicia somente quando o mapa aparece e segue em loop -->
+        <audio id="game-audio" loop preload="auto" src="https://psiangelooliveira.com.br/wp-content/uploads/2026/08/audio-jogo.mp3"></audio>
+
+        <!-- Controle persistente de áudio -->
+        <div id="audio-control" aria-label="Controles de áudio">
+            <div id="audio-panel" aria-hidden="true">
+                <button id="volume-down" class="audio-mini-btn" type="button" aria-label="Diminuir volume">−</button>
+                <span id="volume-value">70%</span>
+                <button id="volume-up" class="audio-mini-btn" type="button" aria-label="Aumentar volume">+</button>
+                <button id="audio-stop" class="audio-mini-btn" type="button" aria-label="Pausar áudio">❚❚</button>
+            </div>
+            <button id="audio-toggle" type="button" aria-label="Abrir controles de áudio" aria-expanded="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M11 5 6 9H2v6h4l5 4V5Z"/>
+                    <path d="M15.5 8.5a5 5 0 0 1 0 7"/>
+                    <path d="M18.5 5.5a9 9 0 0 1 0 13"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Ferramenta opcional de calibração. Só aparece com ?calibrar=1 -->
+        <button id="calibration-toggle" type="button" aria-label="Abrir calibração">⚙ CAL</button>
+        <div id="calibration-panel" aria-hidden="true">
+            <div class="cal-title">CALIBRAÇÃO · <span id="calibration-stage" class="cal-stage">START</span></div>
+            <div class="cal-row">
+                <div class="cal-label"><span>Textos</span><strong id="cal-text-value">100%</strong></div>
+                <input id="cal-text" type="range" min="70" max="145" step="1" value="100">
+            </div>
+            <div class="cal-row">
+                <div class="cal-label"><span>Largura do box</span><strong id="cal-width-value">76%</strong></div>
+                <input id="cal-width" type="range" min="55" max="96" step="0.25" value="76.25">
+            </div>
+            <div class="cal-row">
+                <div class="cal-label"><span>Altura do box</span><strong id="cal-height-value">54%</strong></div>
+                <input id="cal-height" type="range" min="30" max="90" step="0.25" value="53.89">
+            </div>
+            <div class="cal-row">
+                <div class="cal-label"><span>Posição vertical</span><strong id="cal-top-value">8.6%</strong></div>
+                <input id="cal-top" type="range" min="2" max="28" step="0.25" value="8.6">
+            </div>
+            <div class="cal-actions">
+                <button id="cal-reset" class="cal-btn" type="button">RESETAR ETAPA</button>
+                <button id="cal-apply-all" class="cal-btn" type="button">APLICAR A TODAS</button>
+            </div>
+            <div class="cal-hint">Os ajustes ficam salvos neste navegador. Para publicar valores fixos, edite o bloco <b>CALIBRACAO_ETAPAS</b> no HTML.</div>
+        </div>
+
+        <!-- Mapas -->
+        <div id="bg-0" class="bg-layer active" style="background-image: url('https://naboa.eco.br/wp-content/uploads/2026/08/parte_1_1.jpg');"></div>
+        <div id="bg-1" class="bg-layer" style="background-image: url('https://naboa.eco.br/wp-content/uploads/2026/08/parte_1_2.jpg');"></div>
+        <div id="bg-2" class="bg-layer" style="background-image: url('https://naboa.eco.br/wp-content/uploads/2026/08/parte_1_3.jpg');"></div>
+        <div id="bg-3" class="bg-layer" style="background-image: url('https://naboa.eco.br/wp-content/uploads/2026/08/parte_1_4.jpg');">
+            <img
+                id="cenario4-interrogacao-gif"
+                src="https://naboa.eco.br/wp-content/uploads/2026/08/caixa_interrogacao.gif"
+                alt=""
+                aria-hidden="true"
+            >
+        </div>
+
+        <!-- Metrô contínuo: camada global sobre os cenários 1, 2, 3 e 4 -->
+        <img
+            id="metro-global"
+            src="https://naboa.eco.br/wp-content/uploads/2026/08/tremtrem-2.png"
+            alt=""
+            aria-hidden="true"
+        >
+
+        <!-- Marcador Principal -->
+        <div id="marker" class="absolute z-20 transition-transform duration-100 drop-shadow-md" style="width: 11.4%; left: 34.73%; top: 69.59%;">
+            <img src="https://naboa.eco.br/wp-content/uploads/2026/08/LOGONPC.png" class="w-full h-auto" alt="Marcador">
+        </div>
+
+        <!-- Escurecimento do Fundo -->
+        <div id="scrim" class="absolute inset-0 z-30 bg-black/70 backdrop-blur-[2px] opacity-0 pointer-events-none"></div>
+
+        <!-- Introdução antes do primeiro movimento, ainda no START -->
+        <div id="start-intro-overlay" aria-hidden="true">
+            <div id="start-intro-card" class="glass-card">
+                <div id="start-intro-text" class="type-content question-text"></div>
+                <div id="start-intro-action">
+                    <button id="start-intro-arrow" class="btn-arrow" type="button" aria-label="Começar o quiz">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.5 15 12l-6.5 6.5 1.4 1.4L17.8 12 9.9 4.1z"/></svg>
+                    </button>
+                </div>
+            </div>
+            <img id="start-intro-silvia" src="https://naboa.eco.br/wp-content/uploads/2026/08/silvia-intro-a.png" alt="Silvia">
+        </div>
+
+        <!-- Cabeçalho (Header Fixo) -->
+        <div id="top-header" class="absolute top-0 left-0 w-full pl-5 pr-16 py-4 z-40 flex items-center text-white font-bold text-[11px] uppercase tracking-wider drop-shadow-md transition-opacity duration-500">
+            <span style="text-shadow: 0 2px 4px rgba(0,0,0,0.8);">NA ROTA, NA BOA | <span id="step-counter">1/10</span></span>
+        </div>
+
+        <!-- Box Verde Principal -->
+        <div id="card-container" class="absolute z-40 perspective-1000" style="left: 49.40%; top: 8.60%; width: 76.25%; height: 53.89%; transform-origin: center; margin-left: -38.125%;">
+            <div id="card-flipper" class="w-full h-full relative transform-style-3d transition-transform duration-[800ms] ease-in-out">
+                
+                <div id="card-front" class="absolute inset-0 backface-hidden glass-card">
+                    <div id="content-front" class="type-content question-text"></div>
+                    <div id="action-front" class="flex justify-center mt-2 h-[42px]"></div>
+                </div>
+
+                <div id="card-back" class="absolute inset-0 backface-hidden glass-card" style="transform: rotateY(180deg)">
+                    <div id="content-back" class="type-content w-full h-full justify-start pt-1"></div>
+                    <div id="action-back" class="flex justify-center mt-2 h-[42px]"></div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Container dinâmico dos NPCs Grandes -->
+        <div id="npc-layer" class="absolute inset-0 z-50 pointer-events-none"></div>
+
+
+        <!-- Sair do jogo: só aparece a partir da etapa 1 -->
+        <button id="btn-exit-game" type="button" aria-label="Sair do jogo" title="Sair do jogo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 3h9v18H4z"/>
+                <path d="M13 12h7"/>
+                <path d="M17 8l4 4-4 4"/>
+            </svg>
+        </button>
+
+        <div id="exit-confirm-overlay" aria-hidden="true">
+            <div id="exit-confirm-box" role="dialog" aria-modal="true" aria-labelledby="exit-confirm-text">
+                <p id="exit-confirm-text">Quer mesmo sair?</p>
+                <div id="exit-confirm-actions">
+                    <button id="exit-confirm-no" type="button">NÃO</button>
+                    <button id="exit-confirm-yes" type="button">SIM</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Telas Finais (Loading + Indicação) -->
+        <div id="result-screen" class="absolute inset-0 hidden pointer-events-none opacity-0 transition-opacity duration-[1000ms]">
+            
+            <!-- Botão Refazer -->
+            <button id="btn-restart" class="hidden" aria-label="Refazer quiz" title="Refazer quiz">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            </button>
+
+            <!-- Etapa 1 do Final: Loading e Hashtags -->
+            <div id="loading-state" class="hidden">
+                <div class="analysisLead" id="analysisLead">Pelas suas respostas, percebemos que:</div>
+                <div class="loadingTrack"><div class="loadingBar" id="loadingBar"></div></div>
+                
+                <div class="affinityLabels" id="affinityLabels">
+                    <span class="plus">+ AFINIDADE</span>
+                    <span class="minus">- AFINIDADE</span>
+                </div>
+                
+                <div id="tagCloud"></div>
+                
+                <button id="btn-continue-final">CONTINUAR</button>
+            </div>
+
+            <!-- Etapa 2 do Final: A Indicação Vencedora -->
+            <div id="links-state" class="hidden">
+                <div class="resultEyebrow">SEU RESULTADO</div>
+                <h2>Isso não define onde você deveria atuar.</h2>
+                <p>Mas aponta que o primeiro passo pode ser mais assertivo se você começar por:</p>
+                
+                <div class="causeCard">
+                    <div style="font-size: 24px;">🌱</div>
+                    <div>
+                        <small>Indicação de Atuação</small>
+                        <strong id="causeName">Direitos humanos e cidadania</strong>
+                    </div>
+                </div>
+
+                <div class="finalButtons">
+                    <button class="bonusBtn" id="bonusBtn">SALVAR MEU BÔNUS</button>
+                    <button class="causeBtn" id="causeBtn">VER MINHA INDICAÇÃO</button>
+                </div>
+                <div class="bonusStatus" id="bonusStatus">Baixe seu bônus para liberar o link.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ----------------------------------------------------
+        // SISTEMA DE PONTUAÇÃO E CAUSAS
+        // ----------------------------------------------------
+        let userScores = {
+            tags: {
+                '#educação':0, '#impacto':0, '#cidadania':0, '#humanidade':0, '#proximidade':0,
+                '#animais':0, '#meioambiente':0, '#comunidade':0, '#saúde':0, '#inclusão':0,
+                '#organização':0, '#flexibilidade':0, '#constância':0, '#aprendizado':0, '#bastidores':0,
+                '#acolhimento':0, '#bairro':0, '#tecnologia':0, '#eventos':0, '#autonomia':0
+            },
+            causes: {
+                'Meio ambiente e Sustentabilidade': { score: 0, url: 'https://naboa.eco.br/meio-ambiente-e-sustentabilidade' },
+                'Inclusão e diversidade': { score: 0, url: 'https://naboa.eco.br/inclusao-e-diversidade' },
+                'Direitos humanos e cidadania': { score: 0, url: 'https://naboa.eco.br/direitos-humanos-e-cidadania' },
+                'Saúde e bem-estar': { score: 0, url: 'https://naboa.eco.br/saude-e-bem-estar' },
+                'Causa animal': { score: 0, url: 'https://naboa.eco.br/causa-animal' }
+            }
+        };
+
+        function addScore(tagData, causeData) {
+            if(tagData) {
+                for (let tag in tagData) {
+                    if(userScores.tags[tag] !== undefined) userScores.tags[tag] += tagData[tag];
+                }
+            }
+            if(causeData) {
+                for (let cause in causeData) {
+                    if(userScores.causes[cause]) userScores.causes[cause].score += causeData[cause];
+                }
+            }
+        }
+
+        // ----------------------------------------------------
+        // CONFIGURAÇÃO DO QUIZ E ANIMAÇÕES (Digitacao +30% lenta)
+        // ----------------------------------------------------
+        const config = {
+            typeSpeed: 33,     // Aumentado em ~30%
+            punctDelay: 52, 
+            crossfadeDur: 720,
+            flipDur: 800
+        };
+
+
+        // ----------------------------------------------------
+        // CALIBRAÇÃO VISUAL DAS ETAPAS
+        // ----------------------------------------------------
+        // Você pode editar estes números diretamente no HTML.
+        // texto: tamanho de TODOS os textos dentro do box, em %.
+        // larguraBox / alturaBox / topoBox: medidas em % do quadro do jogo.
+        // START é a fala da Silvia antes da peça começar a andar.
+        const CALIBRACAO_ETAPAS = {
+            START: { texto: 100, larguraBox: 82.00, alturaBox: null,  topoBox: 12.50 },
+            '1':   { texto: 100, larguraBox: 76.25, alturaBox: 53.89, topoBox: 8.60 },
+            '2':   { texto: 100, larguraBox: 76.25, alturaBox: 53.89, topoBox: 8.60 },
+            '3':   { texto: 100, larguraBox: 76.25, alturaBox: 53.89, topoBox: 8.60 },
+            '4':   { texto: 100, larguraBox: 76.25, alturaBox: 53.89, topoBox: 8.60 },
+            '5':   { texto: 100, larguraBox: 76.25, alturaBox: 53.89, topoBox: 8.60 },
+            '6':   { texto: 100, larguraBox: 76.25, alturaBox: 53.89, topoBox: 8.60 },
+            '7':   { texto: 100, larguraBox: 76.25, alturaBox: 53.89, topoBox: 8.60 },
+            '8':   { texto: 100, larguraBox: 76.25, alturaBox: 53.89, topoBox: 8.60 },
+            '9':   { texto: 100, larguraBox: 76.25, alturaBox: 53.89, topoBox: 8.60 },
+            '10':  { texto: 100, larguraBox: 76.25, alturaBox: 53.89, topoBox: 8.60 },
+            'BAÚ': { texto: 100, larguraBox: 76.25, alturaBox: 53.89, topoBox: 8.60 }
+        };
+
+        const routes = [
+            /* 1: INÍCIO -> NPC1 */ [[34.73,69.59], [33.15,68.92], [31.12,68.51], [29.10,67.99], [27.81,67.57], [26.70,67.06], [25.41,66.64], [23.39,65.71], [22.28,64.36], [21.92,62.19], [22.10,60.53], [23.94,59.91], [25.97,59.60], [27.99,59.70], [29.83,59.91], [31.86,59.91], [33.89,60.12], [35.91,59.91], [37.75,59.39], [39.23,58.35], [41.25,57.42], [42.54,56.08], [42.54,54.31], [43.32,54.38]],
+            /* 2: NPC1 -> NPC2 */ [[43.32,54.38], [42.91,52.55], [42.36,50.48], [40.88,49.45], [39.59,48.31], [38.31,47.68], [36.46,46.75], [34.81,45.61], [34.44,43.96], [35.73,42.92], [37.94,41.99], [39.78,41.57], [41.62,41.47], [43.65,41.78], [45.30,42.19], [47.33,42.71], [49.17,43.54], [51.01,43.96], [52.85,44.37], [54.33,44.58], [56.72,44.78], [58.01,44.99], [60.04,45.20], [61.69,45.20], [63.54,45.20], [65.56,45.20], [66.85,45.09], [68.88,44.78], [69.40,44.72]],
+            /* 3: NPC2 -> NPC3 */ [[69.40,44.72], [71.09,44.16], [72.93,44.27], [74.77,44.58], [76.80,44.68], [79.19,45.09], [81.22,45.61], [83.24,46.65], [84.35,47.27], [85.45,48.41], [86.92,49.34], [88.21,50.69], [89.13,52.04], [90.24,53.28], [91.16,54.83], [91.71,56.39], [91.53,58.15], [90.24,59.29], [90.07,61.36]],
+            /* 4: NPC3 -> NPC4 */ [[90.07,61.36], [88.40,61.60], [86.92,62.22], [85.82,62.84], [84.71,63.88], [83.98,65.54], [82.87,67.19], [82.87,69.27], [83.98,71.34], [85.08,72.17], [86.19,73.20], [87.66,74.03], [89.50,74.03], [91.71,74.44], [93.19,74.86], [95.03,75.48], [96.87,75.48], [98.71,75.48], [100.55,75.48], [102.39,75.48], [104.24,75.90], [106.08,75.90], [108.29,75.90], [110.50,75.90], [112.34,75.69], [113.44,75.07], [114.92,74.44], [116.02,73.82], [117.50,73.20], [118.60,72.17], [120.07,71.75], [121.55,71.34], [123.02,70.72], [124.86,69.89], [126.34,69.47], [128.18,69.27], [130.02,68.85], [131.49,68.23], [132.60,67.40], [133.70,65.74], [133.84,66.20]],
+            /* 5: NPC4 -> NPC5 */ [[133.84,66.20], [131.86,65.61], [130.02,65.40], [127.81,65.19], [125.97,65.09], [123.76,64.57], [121.92,63.95], [120.44,62.91], [119.52,61.57], [119.15,59.49], [120.44,58.25], [121.73,57.73], [123.20,57.32], [124.49,57.01], [125.78,56.80], [127.99,56.39], [129.83,56.18], [131.68,55.66], [132.78,53.90], [133.89,52.24], [135.36,51.00], [135.73,49.13], [135.50,49.18]],
+            /* 6: NPC5 -> NPC6 */ [[135.50,49.18], [137.38,48.41], [138.49,47.17], [138.67,45.51], [137.38,43.64], [136.83,42.19], [137.38,40.54], [138.67,39.29], [140.33,38.15], [141.99,37.33], [143.83,36.60], [145.86,35.98], [147.51,35.25], [149.54,34.74], [151.38,34.63], [152.67,34.32], [154.70,34.22], [156.72,33.80], [158.75,33.60], [160.77,33.08], [162.80,33.29], [164.64,33.91], [164.50,33.57]],
+            /* 7: NPC6 -> NPC7 */ [[164.50,33.57], [166.30,33.84], [167.77,34.46], [169.24,34.87], [170.72,35.49], [172.19,35.91], [173.30,36.53], [174.40,37.15], [175.87,37.57], [177.35,38.19], [178.45,38.81], [179.93,39.22], [181.77,40.67], [183.61,42.12], [185.08,42.54], [186.56,43.16], [188.03,43.57], [189.50,44.20], [190.98,44.82], [192.45,45.23], [193.92,45.65], [196.13,46.06], [197.24,46.68], [199.08,47.10], [200.18,47.72], [201.66,48.34], [203.87,48.96], [205.34,49.79], [207.55,50.62], [209.02,51.03], [210.50,51.45], [211.97,51.86], [214.92,52.69], [216.76,53.31], [218.97,53.93], [220.44,54.55], [221.92,54.97], [223.76,55.59], [225.23,56.01], [227.44,56.42], [229.28,56.83], [230.76,57.25], [232.60,57.46], [234.44,57.66], [235.91,58.08], [237.38,58.49], [237.15,58.04]],
+            /* 8: NPC7 -> BAÚ */ [[237.15,58.04], [235.54,57.84], [235.73,59.60], [235.17,61.26], [234.25,62.71], [232.97,63.95], [231.68,65.19], [230.39,66.33], [229.10,67.68], [227.81,69.13], [226.70,70.47], [225.60,72.24], [224.86,73.89], [224.49,76.07], [224.49,77.83], [224.49,79.49], [225.60,80.83], [226.89,82.18], [228.18,83.32], [229.83,84.15], [231.68,84.98], [233.52,85.50], [235.73,86.32], [237.38,86.95], [239.23,87.57], [240.52,87.88], [242.73,88.40], [244.75,88.71], [247.15,88.60], [248.80,88.50], [250.46,88.29], [251.57,87.77], [253.04,86.64], [254.33,85.39], [255.80,85.08]],
+            /* 9: BAÚ -> NPC8 */ [[255.80,85.08], [253.78,83.94], [252.49,83.73], [251.20,83.42], [249.91,83.11], [247.70,82.39], [246.59,81.14], [246.22,79.28], [247.15,77.83], [248.99,76.69], [250.09,76.17], [252.49,75.24], [254.51,74.62], [256.17,73.89], [258.01,72.55], [258.93,70.89], [257.64,68.09], [255.25,67.16], [253.59,66.54], [252.12,65.81], [250.46,65.40], [248.43,64.88], [248.07,63.22], [249.17,61.88], [250.83,60.84], [252.12,60.43], [253.96,60.12], [255.62,59.70], [257.27,59.18], [258.93,57.94], [259.30,56.08], [259.30,54.83], [258.38,53.69], [257.27,52.45], [256.17,50.59], [255.80,49.42]],
+            /* 10: NPC8 -> NPC9 */ [[255.80,49.42], [257.27,48.31], [259.30,47.68], [261.14,47.37], [263.17,46.96], [265.19,46.75], [267.03,46.55], [268.32,46.55], [270.17,46.44], [272.19,46.44], [274.22,46.65], [276.06,46.86], [277.90,47.06], [279.74,47.58], [281.58,48.00], [283.43,48.41], [285.45,49.13], [287.29,49.96], [289.13,50.69], [290.20,51.52]],
+            /* 11: NPC9 -> ESTRELA */ [[290.20,51.52], [290.61,50.00], [292.45,50.20], [293.92,50.62], [295.40,51.03], [296.87,51.65], [299.08,52.28], [300.55,52.69], [302.03,53.10], [303.13,53.93], [304.60,54.35], [306.08,56.01], [307.55,57.66], [308.66,59.73], [309.39,60.98], [310.50,62.84], [311.60,63.67], [312.34,64.71], [313.81,66.57], [314.55,67.61], [316.02,69.47], [317.50,71.13], [318.60,72.17], [320.07,74.44], [321.55,75.48], [322.65,76.52], [324.49,78.17], [325.97,79.83], [327.81,81.28], [328.91,81.90], [330.39,82.53], [332.23,83.15], [333.33,83.77], [334.81,84.39], [336.65,85.01], [338.49,85.43], [339.96,85.84], [341.44,86.25], [342.91,86.67], [345.12,87.29], [346.96,87.50], [349.17,87.70], [351.01,88.12], [352.85,88.12], [354.70,88.53], [356.91,88.53], [358.75,88.53], [360.59,88.53], [362.80,88.53], [365.38,88.53], [367.22,88.33], [369.06,87.91], [370.53,87.50], [372.38,87.08], [374.22,86.67], [375.32,85.84], [376.06,84.80], [377.16,83.77], [377.16,82.11], [377.16,80.45], [378.59,82.98]],
+            /* 12: ESTRELA -> INT. FINAL */ [[378.59,82.98], [376.61,82.70], [374.22,82.08], [372.19,81.46], [370.35,80.83], [368.32,80.21], [366.85,79.07], [365.93,77.42], [365.38,75.65], [365.38,73.79], [367.03,72.55], [368.88,71.72], [370.35,70.47], [371.64,69.34], [373.11,68.20], [374.22,66.75], [374.59,65.50], [375.69,63.84], [376.24,62.29], [376.98,60.74], [377.72,59.29], [378.45,57.73], [379.19,56.18], [379.74,54.31], [380.11,52.66], [380.48,51.10], [380.85,49.34], [380.85,47.48], [380.85,45.82], [379.56,44.37], [377.72,42.82], [375.69,41.78], [373.66,41.68], [371.64,41.05], [368.88,40.95], [367.59,40.85], [366.30,40.54], [365.19,39.29], [364.92,40.56]]
+        ];
+
+        // Definindo os nós do jogo com os textos solicitados sem corte
+        const gameNodes = [
+            { 
+                id: "NPC1", step: 1, type: "npc", mapPoint: {x: 43.32, y: 54.38}, asset: "https://naboa.eco.br/wp-content/uploads/2026/08/NPC.01.png", align: 'left',
+                uiType: 'standard',
+                q: "1 - Qual o principal motivo te leva a se tornar um voluntário?", 
+                a: [
+                    { text: "Fazer o bem aos outros", tags: {'#humanidade': 2, '#impacto': 1}, causes: {'Direitos humanos e cidadania': 2} }, 
+                    { text: "Ocupar um tempo ocioso", tags: {'#flexibilidade': 2, '#aprendizado': 1}, causes: {'Saúde e bem-estar': 2} }, 
+                    { text: "Interagir com pessoas diferentes", tags: {'#comunidade': 2, '#proximidade': 1}, causes: {'Inclusão e diversidade': 2} }, 
+                    { text: "Sentir-se útil", tags: {'#impacto': 2, '#autonomia': 1}, causes: {'Meio ambiente e Sustentabilidade': 2} }
+                ],
+                comment: "No voluntariado, dar o primeiro passo não existe motivo 'melhor' ou 'pior' para começar. Seja pelo desejo de transformar o mundo ou pela busca por conexão, seu primeiro passo inicia uma trajetória. Prepare-se para uma jornada única!"
+            },
+            { 
+                id: "NPC2", step: 2, type: "npc", mapPoint: {x: 69.40, y: 44.72}, asset: "https://naboa.eco.br/wp-content/uploads/2026/08/NPC02.png", align: 'center',
+                uiType: 'standard',
+                q: "2 - Como você vê a causa animal dentro do voluntariado?", 
+                a: [
+                    { text: "A - Importante, mas depois da causa humana", tags: {'#humanidade': 2, '#animais': -1}, causes: {'Direitos humanos e cidadania': 2} },
+                    { text: "B - Impossível de não estar incluída na causa humana", tags: {'#meioambiente': 2, '#animais': 1}, causes: {'Meio ambiente e Sustentabilidade': 2} },
+                    { text: "C - Animais dependem de nós, então a causa é maior", tags: {'#animais': 3}, causes: {'Causa animal': 3} },
+                    { text: "D - Tem mais atenção que deveria", tags: {'#cidadania': 2, '#animais': -1}, causes: {'Inclusão e diversidade': 2} }
+                ],
+                comment: "Para a ONU, a causa animal é fundamental como parte do equilíbrio ambiental, saúde pública e controle de zoonoses. Ser parte de quem faz a diferença é o que merece atenção nesse debate. Vamos em frente!"
+            },
+            { 
+                id: "NPC3", step: 3, type: "npc", mapPoint: {x: 90.07, y: 61.36}, asset: "https://naboa.eco.br/wp-content/uploads/2026/08/NPC_03.png", align: 'right', // Posicionado à direita
+                uiType: 'standard',
+                q: "3 - Quanto você concorda com essa frase?\n\nO voluntariado não precisa ser um compromisso fixo ou recorrente. É possível ajudar quando dá, sem fazer disso uma obrigação.", 
+                a: [
+                    { text: "Discordo totalmente", tags: {'#constância': 3, '#flexibilidade': -2}, causes: {'Inclusão e diversidade': 1} }, 
+                    { text: "Discordo", tags: {'#constância': 2, '#flexibilidade': -1}, causes: {} }, 
+                    { text: "Depende", tags: {'#flexibilidade': 1}, causes: {} }, 
+                    { text: "Concordo", tags: {'#flexibilidade': 2, '#constância': -1}, causes: {} }, 
+                    { text: "Concordo totalmente", tags: {'#flexibilidade': 3, '#constância': -2}, causes: {'Meio ambiente e Sustentabilidade': 1} }
+                ],
+                comment: "Ter uma rotina cria estabilidade, mas não invalida ações de voluntariado pontuais. Porém, seja qual for a frequência, cumprir o que se combina é fundamental."
+            },
+            { 
+                id: "NPC4", step: 4, type: "npc", mapPoint: {x: 133.84, y: 66.20}, asset: "https://naboa.eco.br/wp-content/uploads/2026/08/NPC_04.png", align: 'left',
+                uiType: 'tokens',
+                q: "4 - Você recebeu 5 fichas. Distribua como quiser entre estas áreas. Pode colocar todas em uma ou dividir.", 
+                items: [
+                    { label: "🐾 Proteção animal", tag: '#animais', cause: 'Causa animal' }, 
+                    { label: "🌱 Meio ambiente", tag: '#meioambiente', cause: 'Meio ambiente e Sustentabilidade' }, 
+                    { label: "📚 Educação", tag: '#educação', cause: 'Inclusão e diversidade' }, 
+                    { label: "🍲 Fome e vulnerabilidade", tag: '#acolhimento', cause: 'Direitos humanos e cidadania' }, 
+                    { label: "👵 Envelhecimento e cuidado", tag: '#saúde', cause: 'Saúde e bem-estar' }
+                ],
+                comment: "Saber onde não atuar também é útil. Voluntariado costuma funcionar melhor quando existe compatibilidade mínima com a causa."
+            },
+            { 
+                id: "NPC5", step: 5, type: "npc", mapPoint: {x: 135.50, y: 49.18}, asset: "https://naboa.eco.br/wp-content/uploads/2026/08/NPC_05.png", align: 'center',
+                uiType: 'sliders',
+                q: "5 - Se você fosse considerar uma primeira experiência voluntária, quanto cada fator pesaria?\n\nArraste de “quase nada” até “muito”.", 
+                items: [
+                    { label: "Ser perto de casa", tagPlus: '#bairro', tagMinus: '#impacto' },
+                    { label: "Confiar na organização", tagPlus: '#organização', tagMinus: '#flexibilidade' },
+                    { label: "Saber exatamente o que fazer", tagPlus: '#bastidores', tagMinus: '#autonomia' },
+                    { label: "Participar sem frequência fixa", tagPlus: '#flexibilidade', tagMinus: '#constância' }
+                ],
+                comment: "Escolher uma organização envolve mais do que afinidade com uma causa e influencia bastante a continuidade. Às vezes uma oportunidade menos “ideal” no papel funciona melhor na rotina real."
+            },
+            { 
+                id: "NPC6", step: 6, type: "npc", mapPoint: {x: 164.50, y: 33.57}, asset: "https://naboa.eco.br/wp-content/uploads/2026/08/NPC_06.png", align: 'left',
+                uiType: 'doors',
+                q: "6 - Qual das duas situações faria mais sentido para você?",
+                doors: [
+                    { label: "PORTA A", desc: "Uma organização muito conhecida, estruturada e com atividades definidas.", tags: {'#organização': 2, '#impacto': 1}, causes: {} },
+                    { label: "PORTA B", desc: "Um projeto pequeno do seu bairro, com pouca estrutura, mas com maior proximidade.", tags: {'#bairro': 2, '#proximidade': 2}, causes: {} }
+                ],
+                otherOption: { text: "Não sei", tags: {'#aprendizado': 2}, causes: {} },
+                comment: "Organizações maiores costumam oferecer processos mais definidos, enquanto iniciativas pequenas permitem maior contato e flexibilidade."
+            },
+            { 
+                id: "NPC7", step: 7, type: "npc", mapPoint: {x: 237.15, y: 58.04}, asset: "https://naboa.eco.br/wp-content/uploads/2026/08/NPC_07.png", align: 'center',
+                uiType: 'sort',
+                q: "7 - O que você toleraria menos?\n\nOrdene do que MAIS dificulta (topo) para o que MENOS pesaria (fim).", 
+                items: [
+                    { label: "Não entendo o impacto.", tag: '#impacto' },
+                    { label: "Situações extremas.", tag: '#humanidade' },
+                    { label: "Pessoas muito diferentes.", tag: '#inclusão' },
+                    { label: "Horários rígidos.", tag: '#flexibilidade' },
+                    { label: "Tarefas repetitivas.", tag: '#bastidores' }
+                ],
+                comment: "Muitas desistências não acontecem por falta de interesse na causa. O que torna fundamental esclarecer todas as dúvidas antes de iniciar."
+            },
+            { 
+                id: "BAÚ", type: "item", mapPoint: {x: 255.80, y: 85.08}, asset: "https://naboa.eco.br/wp-content/uploads/2026/08/bau.png", align: 'center',
+                uiType: 'info',
+                q: "Chegar até aqui mostra que seu interesse é genuíno. Então, clique abaixo e salvaremos um brinde para você resgatar ao final.", 
+                btnText: "RESGATE",
+                comment: "" 
+            },
+            { 
+                id: "NPC8", step: 8, type: "npc", mapPoint: {x: 255.80, y: 49.42}, asset: "https://naboa.eco.br/wp-content/uploads/2026/08/NPC_08.png", align: 'right', // Meninos deslocados à direita
+                uiType: 'swipe',
+                q: "8 - Concorda, discorda ou deixa passar?\n\nResponda as afirmações a seguir:", 
+                cards: [
+                    { text: "Carta 1: 'Uma ação pequena vale a pena mesmo sem resolver a origem do problema.'", tagsYes: {'#impacto': 1}, tagsNo: {'#organização': 1} },
+                    { text: "Carta 2: 'Ajudar diretamente alguém que desaprovo a conduta seria difícil.'", tagsYes: {'#afinidade': 1}, tagsNo: {'#humanidade': 2} }
+                ],
+                comment: "Excelente reflexão. O voluntariado nos desafia a olhar além das nossas próprias convicções iniciais."
+            },
+            { 
+                id: "NPC9", step: 9, type: "npc", mapPoint: {x: 290.20, y: 51.52}, asset: "https://naboa.eco.br/wp-content/uploads/2026/08/NPC_09.png", align: 'center',
+                uiType: 'multi',
+                q: "9 - Na prateleira de possibilidades, você pode pegar até 3 itens. Quais levaria?", 
+                items: [
+                    { label: "🧑‍🏫 Ensinar algo", tag: '#educação', cause: 'Inclusão e diversidade' }, 
+                    { label: "🐕 Cuidar de animais", tag: '#animais', cause: 'Causa animal' }, 
+                    { label: "🌳 Ação ambiental", tag: '#meioambiente', cause: 'Meio ambiente e Sustentabilidade' }, 
+                    { label: "📦 Organizar doações", tag: '#bastidores', cause: 'Direitos humanos e cidadania' }, 
+                    { label: "👥 Acompanhar pessoas", tag: '#saúde', cause: 'Saúde e bem-estar' }, 
+                    { label: "💻 Trabalho remoto", tag: '#tecnologia', cause: 'Educação' }, 
+                    { label: "📷 Usar habilidade", tag: '#autonomia', cause: 'Comunidade' }, 
+                    { label: "🏘️ Em prol do bairro", tag: '#bairro', cause: 'Inclusão e diversidade' }, 
+                    { label: "🎪 Apoiar eventos", tag: '#eventos', cause: 'Eventos' }
+                ],
+                comment: "Projetos também precisam de logística, comunicação, tecnologia e outras funções que normalmente ficam fora da imagem mais conhecida do voluntariado. Conhecer pode te ajudar a extrair o melhor de si."
+            },
+            { 
+                id: "ESTRELA", step: 10, type: "item", mapPoint: {x: 378.59, y: 82.98}, asset: "https://naboa.eco.br/wp-content/uploads/2026/08/estrela.gif", align: 'center',
+                uiType: 'standard',
+                q: "10 - Das atividades abaixo, qual você acha que combina menos com a ideia de voluntariado?", 
+                a: [
+                    { text: "A. Criar uma planilha.", tags: {'#bastidores': 1}, causes: {} }, 
+                    { text: "B. Fotografar um evento.", tags: {'#bastidores': 1}, causes: {} }, 
+                    { text: "C. Distribuir informativos.", tags: {'#bastidores': 1}, causes: {} }, 
+                    { text: "D. Dirigir um veículo.", tags: {'#bastidores': 1}, causes: {} }, 
+                    { text: "E. Administrar redes sociais.", tags: {'#bastidores': 1}, causes: {} }
+                ],
+                comment: "O que define a atividade não é parecer “social”, e sim contribuir com o propósito de uma iniciativa. Assim como um filme, há bastidores essenciais para que ele exista.\n\nDICA: Sabia que fazer o bem ao lado de quem gostamos pode tornar o voluntariado ainda mais incrível? Convide alguém para caminhar ao seu lado!"
+            },
+            { 
+                id: "INT_FINAL", type: "final", mapPoint: {x: 364.92, y: 40.56}, asset: "https://naboa.eco.br/wp-content/uploads/2026/08/caixa_interrogacao.gif", align: 'center'
+            }
+        ];
+
+        let currentRouteIdx = 0;
+        let globalX = 34.73;
+        let globalY = 69.59;
+        let activeFrame = 0;
+        let distanceTravelled = 0;
+        let abortTyping = false;
+
+        const marker = document.getElementById('marker');
+        const bgLayers = [document.getElementById('bg-0'), document.getElementById('bg-1'), document.getElementById('bg-2'), document.getElementById('bg-3')];
+        const scrim = document.getElementById('scrim');
+        const cardContainer = document.getElementById('card-container');
+        const cardFlipper = document.getElementById('card-flipper');
+        const npcLayer = document.getElementById('npc-layer');
+
+
+        // Ajustes feitos pelo painel opcional ficam separados do código-base.
+        const CALIBRATION_STORAGE_KEY = 'naboa-calibracao-v1';
+        let calibrationOverrides = {};
+        try {
+            calibrationOverrides = JSON.parse(localStorage.getItem(CALIBRATION_STORAGE_KEY) || '{}') || {};
+        } catch (e) {
+            calibrationOverrides = {};
+        }
+        let activeCalibrationKey = 'START';
+
+        function getCalibrationKey(node) {
+            if (!node) return 'START';
+            if (node.step) return String(node.step);
+            return node.id || 'START';
+        }
+
+        function getCalibration(key) {
+            const base = CALIBRACAO_ETAPAS[key] || CALIBRACAO_ETAPAS['1'];
+            const override = calibrationOverrides[key] || {};
+            return { ...base, ...override };
+        }
+
+        function saveCalibration() {
+            try { localStorage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(calibrationOverrides)); } catch (e) {}
+        }
+
+        function applyStartCalibration() {
+            const cal = getCalibration('START');
+            const startCard = document.getElementById('start-intro-card');
+            startCard.style.setProperty('--start-text-scale', '1');
+            startCard.style.width = `${cal.larguraBox}%`;
+            startCard.style.top = `${cal.topoBox}%`;
+            if (cal.alturaBox != null) {
+                startCard.style.height = `${cal.alturaBox}%`;
+                startCard.style.minHeight = `${cal.alturaBox}%`;
+                startCard.style.maxHeight = `${cal.alturaBox}%`;
+            } else {
+                startCard.style.height = '';
+                startCard.style.minHeight = '35%';
+                startCard.style.maxHeight = '45%';
+            }
+        }
+
+        function applyStageCalibration(node) {
+            const key = getCalibrationKey(node);
+            const cal = getCalibration(key);
+            activeCalibrationKey = key;
+            cardContainer.style.setProperty('--cal-text-scale', '1');
+            cardContainer.style.width = `${cal.larguraBox}%`;
+            cardContainer.style.height = `${cal.alturaBox}%`;
+            cardContainer.style.top = `${cal.topoBox}%`;
+            cardContainer.style.left = '49.40%';
+            cardContainer.style.marginLeft = `${-(cal.larguraBox / 2)}%`;
+
+            // A etapa 9 possui um layout maior na tela de múltipla escolha.
+            // Mantemos a proporção original, mas fazemos esse layout acompanhar a calibração.
+            if (key === '9') {
+                const widthRatio = cal.larguraBox / 76.25;
+                const heightRatio = cal.alturaBox / 53.89;
+                const npc9Width = 86 * widthRatio;
+                const npc9Height = 82 * heightRatio;
+                const npc9Top = 12 + (cal.topoBox - 8.60);
+                cardContainer.style.setProperty('--npc9-width', `${npc9Width}%`);
+                cardContainer.style.setProperty('--npc9-height', `${npc9Height}%`);
+                cardContainer.style.setProperty('--npc9-top', `${npc9Top}%`);
+                cardContainer.style.setProperty('--npc9-margin-left', `${-(npc9Width / 2)}%`);
+            }
+            refreshCalibrationPanel();
+        }
+
+        function refreshCalibrationPanel() {
+            const stageEl = document.getElementById('calibration-stage');
+            if (!stageEl) return;
+            const cal = getCalibration(activeCalibrationKey);
+            const displayHeight = cal.alturaBox == null ? 40 : cal.alturaBox;
+            stageEl.textContent = activeCalibrationKey === 'START' ? 'START / SILVIA' : (activeCalibrationKey === 'BAÚ' ? 'BAÚ' : `ETAPA ${activeCalibrationKey}`);
+            document.getElementById('cal-text').value = cal.texto;
+            document.getElementById('cal-width').value = cal.larguraBox;
+            document.getElementById('cal-height').value = displayHeight;
+            document.getElementById('cal-top').value = cal.topoBox;
+            document.getElementById('cal-text-value').textContent = `${Number(cal.texto).toFixed(0)}%`;
+            document.getElementById('cal-width-value').textContent = `${Number(cal.larguraBox).toFixed(1)}%`;
+            document.getElementById('cal-height-value').textContent = cal.alturaBox == null ? 'AUTO' : `${Number(cal.alturaBox).toFixed(1)}%`;
+            document.getElementById('cal-top-value').textContent = `${Number(cal.topoBox).toFixed(1)}%`;
+        }
+
+        function applyCalibrationToVisibleKey() {
+            if (activeCalibrationKey === 'START') {
+                applyStartCalibration();
+                document.getElementById('start-intro-text').style.fontSize = '';
+            } else {
+                const cal = getCalibration(activeCalibrationKey);
+                cardContainer.style.setProperty('--cal-text-scale', '1');
+                cardContainer.style.width = `${cal.larguraBox}%`;
+                cardContainer.style.height = `${cal.alturaBox}%`;
+                cardContainer.style.top = `${cal.topoBox}%`;
+                cardContainer.style.marginLeft = `${-(cal.larguraBox / 2)}%`;
+                if (activeCalibrationKey === '9') {
+                    const widthRatio = cal.larguraBox / 76.25;
+                    const heightRatio = cal.alturaBox / 53.89;
+                    const npc9Width = 86 * widthRatio;
+                    const npc9Height = 82 * heightRatio;
+                    const npc9Top = 12 + (cal.topoBox - 8.60);
+                    cardContainer.style.setProperty('--npc9-width', `${npc9Width}%`);
+                    cardContainer.style.setProperty('--npc9-height', `${npc9Height}%`);
+                    cardContainer.style.setProperty('--npc9-top', `${npc9Top}%`);
+                    cardContainer.style.setProperty('--npc9-margin-left', `${-(npc9Width / 2)}%`);
+                }
+                // O typewriter pode ter deixado um tamanho inline para evitar overflow.
+                // Ao calibrar ao vivo, removemos esse inline para o slider responder imediatamente.
+                document.getElementById('content-front').style.fontSize = '';
+                document.getElementById('content-back').style.fontSize = '';
+            }
+            refreshCalibrationPanel();
+        }
+
+        function updateMarkerPosition(x, y) {
+            globalX = x;
+            globalY = y;
+            
+            let newFrame = Math.floor(x / 100);
+            if(newFrame > 3) newFrame = 3;
+            if (newFrame !== activeFrame) {
+                bgLayers[activeFrame].classList.remove('active');
+                activeFrame = newFrame;
+                bgLayers[activeFrame].classList.add('active');
+            }
+
+            const localX = x - (activeFrame * 100);
+            marker.style.left = `${localX}%`;
+            marker.style.top = `${y}%`;
+        }
+
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+        async function animateSegment(p1, p2, duration) {
+            const startX = p1[0], startY = p1[1];
+            const endX = p2[0], endY = p2[1];
+            const dist = Math.hypot(endX - startX, endY - startY);
+
+            return new Promise(resolve => {
+                let start = null;
+                function step(timestamp) {
+                    if (!start) start = timestamp;
+                    let progress = (timestamp - start) / duration;
+                    if (progress > 1) progress = 1;
+
+                    const curX = startX + (endX - startX) * progress;
+                    const curY = startY + (endY - startY) * progress;
+                    
+                    updateMarkerPosition(curX, curY);
+
+                    if (progress < 1) requestAnimationFrame(step);
+                    else { distanceTravelled += dist; resolve(); }
+                }
+                requestAnimationFrame(step);
+            });
+        }
+
+        async function playRoute(routeIndex) {
+            if(routeIndex >= routes.length) return;
+            const route = routes[routeIndex];
+            updateMarkerPosition(route[0][0], route[0][1]);
+
+            for (let i = 0; i < route.length - 1; i++) {
+                const p1 = route[i];
+                const p2 = route[i+1];
+                const dist = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+                const duration = Math.max(90, dist * 68);
+                await animateSegment(p1, p2, duration);
+            }
+            await sleep(250);
+            openInteraction(gameNodes[routeIndex]);
+        }
+
+        async function typeWriter(text, element, speed = config.typeSpeed) {
+            element.innerHTML = '';
+            abortTyping = false;
+            element.style.visibility = 'visible';
+            element.style.fontSize = '';
+
+            for(let i=0; i<text.length; i++) {
+                if(abortTyping) break;
+                let char = text[i];
+                if(char === '\n') {
+                    element.innerHTML += '<br>';
+                    continue;
+                }
+                element.innerHTML += char;
+                let delay = speed;
+                if(['.', ',', '!', '?', ';', ':'].includes(char)) delay += config.punctDelay;
+                await sleep(delay);
+            }
+        }
+
+        async function openInteraction(node) {
+            if (node && node.step && Number(node.step) >= 1) {
+                document.getElementById('btn-exit-game').classList.add('visible');
+            }
+            cardContainer.dataset.uiType = node.uiType || '';
+            scrim.style.opacity = '1';
+            scrim.style.pointerEvents = 'auto';
+
+            if (node.id === 'INT_FINAL') {
+                return openFinalInteraction(node);
+            }
+
+            const startLocX = node.mapPoint.x - (activeFrame * 100);
+            const container = document.createElement('div');
+            container.className = `npc-sprite z-[60]`;
+            
+            container.style.left = `${startLocX}%`;
+            container.style.top = `${node.mapPoint.y}%`;
+            container.style.width = `10%`; 
+            container.style.transform = `translate(-50%, -50%) scale(0.1)`;
+            container.style.opacity = '0';
+            
+            const shadow = document.createElement('div');
+            shadow.className = 'npc-shadow w-[70%]';
+            
+            const img = document.createElement('img');
+            img.src = node.asset;
+            // Estrela 20% menor que o padrão
+            if (node.id === 'ESTRELA') {
+                img.className = `w-[60%] h-auto mx-auto drop-shadow-lg item-idle-anim`;
+            } else {
+                img.className = `w-full h-auto drop-shadow-lg ${node.type === 'item' ? 'item-idle-anim' : 'idle-anim'}`;
+            }
+            
+            if(node.type === 'npc') container.appendChild(shadow);
+            container.appendChild(img);
+            npcLayer.appendChild(container);
+
+            void container.offsetWidth;
+
+            container.style.top = 'auto';
+            container.style.bottom = '0%';
+            
+            // Posicionamento inteligente para evitar cortes
+            let alignX = '58%'; 
+            if (node.align === 'left') alignX = '58%';
+            if (node.align === 'right') alignX = '78%'; 
+            if (node.id === 'NPC2') alignX = '57%'; // Rapaz com gato e cão: ajustado um pouco à direita
+            if (node.id === 'NPC3') alignX = '78%';
+            if (node.id === 'NPC8') alignX = '74%'; 
+            if (node.id === 'ESTRELA') alignX = '50%'; // Estrela centralizada
+            
+            container.style.left = alignX;
+            container.style.width = node.type === 'item' ? '75%' : '75%';
+
+            // Apenas a estrela aberta sobe um pouco.
+            // A posição dela no mapa permanece exatamente igual.
+            if (node.id === 'ESTRELA') {
+                container.style.bottom = '4%';
+            }
+
+            container.style.transform = `translate(-50%, 5%) scale(1)`;
+            container.style.opacity = '1';
+            if(shadow) shadow.style.opacity = '1';
+
+            await sleep(450); // Transição +30% mais devagar
+            
+            cardFlipper.style.transform = 'rotateY(0deg)';
+            const cFront = document.getElementById('content-front');
+            const aFront = document.getElementById('action-front');
+            aFront.innerHTML = '';
+            
+            if (node.step) {
+                document.getElementById('step-counter').innerText = `${node.step}/10`;
+            }
+
+            // Aplica a calibração específica desta etapa antes de abrir o box.
+            applyStageCalibration(node);
+            cardContainer.classList.add('active');
+            
+            await sleep(500); 
+            await typeWriter(node.q, cFront);
+
+            const arrow1 = document.createElement('div');
+            arrow1.className = 'btn-arrow fade-in';
+            arrow1.innerHTML = `<svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+            arrow1.onclick = () => {
+                if (node.uiType === 'info') closeInteraction(node, container);
+                else transitionToAnswers(node, container);
+            };
+            
+            if(node.uiType === 'info') {
+                arrow1.innerHTML = node.btnText;
+                arrow1.style.width = 'auto';
+                arrow1.style.padding = '0 20px';
+                arrow1.style.borderRadius = '20px';
+                arrow1.style.fontWeight = 'bold';
+            }
+            
+            aFront.appendChild(arrow1);
+        }
+
+        async function transitionToAnswers(node, charContainer) {
+            const aFront = document.getElementById('action-front');
+            aFront.innerHTML = ''; 
+            
+            const cBack = document.getElementById('content-back');
+            const aBack = document.getElementById('action-back');
+            cBack.innerHTML = '';
+            aBack.innerHTML = '';
+            
+            if (node.id === 'NPC9') cardContainer.classList.add('npc9-layout');
+            
+            cardFlipper.style.transform = 'rotateY(180deg)';
+            await sleep(config.flipDur);
+
+            let confirmBtn = document.createElement('div');
+            confirmBtn.className = 'btn-confirm';
+            confirmBtn.innerText = 'CONFIRMAR';
+            
+            if (node.uiType === 'standard') {
+                let selectedAnswer = null;
+                confirmBtn.onclick = () => { 
+                    if(selectedAnswer) {
+                        addScore(selectedAnswer.tags, selectedAnswer.causes);
+                        transitionToComment(node, charContainer); 
+                    }
+                };
+
+                node.a.forEach((ansData, i) => {
+                    let btn = document.createElement('div');
+                    btn.className = 'btn-answer fade-in';
+                    btn.style.animationDelay = `${i * 0.1}s`;
+                    btn.innerText = ansData.text;
+                    cBack.appendChild(btn);
+
+                    btn.onclick = () => {
+                        Array.from(cBack.children).forEach(c => c.classList.remove('selected'));
+                        btn.classList.add('selected');
+                        selectedAnswer = ansData;
+                        confirmBtn.classList.add('visible');
+                    };
+                });
+            } 
+            else if (node.uiType === 'doors') {
+                let selectedDoor = null;
+                confirmBtn.onclick = () => {
+                    if(selectedDoor) {
+                        addScore(selectedDoor.tags, selectedDoor.causes);
+                        transitionToComment(node, charContainer);
+                    }
+                };
+
+                let doorsWrapper = document.createElement('div');
+                doorsWrapper.className = 'door-container fade-in';
+                
+                node.doors.forEach((doorData) => {
+                    let dCard = document.createElement('div');
+                    dCard.className = 'door-card';
+                    dCard.innerHTML = `<div class="door-title">${doorData.label}</div><div class="door-desc">${doorData.desc}</div>`;
+                    dCard.onclick = () => {
+                        Array.from(doorsWrapper.children).forEach(c => c.classList.remove('selected'));
+                        dCard.classList.add('selected');
+                        if(otherBtn) otherBtn.classList.remove('selected');
+                        selectedDoor = doorData;
+                        confirmBtn.classList.add('visible');
+                    };
+                    doorsWrapper.appendChild(dCard);
+                });
+                cBack.appendChild(doorsWrapper);
+
+                let otherBtn = document.createElement('div');
+                otherBtn.className = 'btn-answer mt-3 fade-in text-center';
+                otherBtn.innerText = node.otherOption.text;
+                otherBtn.onclick = () => {
+                    Array.from(doorsWrapper.children).forEach(c => c.classList.remove('selected'));
+                    otherBtn.classList.add('selected');
+                    selectedDoor = node.otherOption;
+                    confirmBtn.classList.add('visible');
+                };
+                cBack.appendChild(otherBtn);
+            }
+            else if (node.uiType === 'tokens') {
+                let tokensLeft = 5;
+                let counts = new Array(node.items.length).fill(0);
+                
+                const header = document.createElement('div');
+                header.className = 'quiz-answer-helper mb-2 font-bold text-[#e64771]';
+                header.innerText = `Saldo total de fichas: 5`;
+                cBack.appendChild(header);
+
+                node.items.forEach((item, i) => {
+                    let row = document.createElement('div');
+                    row.className = 'token-row fade-in';
+                    row.style.animationDelay = `${i * 0.05}s`;
+                    
+                    let label = document.createElement('span');
+                    label.innerText = item.label;
+                    label.className = 'pr-1 flex-1 leading-tight';
+                    
+                    let controls = document.createElement('div');
+                    controls.className = 'flex items-center gap-2 justify-end flex-shrink-0';
+                    
+                    let countDisp = document.createElement('span');
+                    countDisp.className = 'w-4 text-center font-bold text-xs text-white'; countDisp.innerText = '0';
+                    
+                    let stack = document.createElement('div');
+                    stack.className = 'flex flex-col gap-[1px]';
+                    
+                    let btnPlus = document.createElement('div');
+                    btnPlus.className = 'token-btn-v'; btnPlus.innerHTML = '▲';
+                    
+                    let btnMinus = document.createElement('div');
+                    btnMinus.className = 'token-btn-v'; btnMinus.innerHTML = '▼';
+
+                    btnMinus.onclick = () => {
+                        if(counts[i] > 0) { counts[i]--; tokensLeft++; updateTokens(); }
+                    };
+                    btnPlus.onclick = () => {
+                        if(tokensLeft > 0) { counts[i]++; tokensLeft--; updateTokens(); }
+                    };
+
+                    function updateTokens() {
+                        countDisp.innerText = counts[i];
+                        header.innerText = `Saldo total de fichas: ${tokensLeft}`;
+                        if(tokensLeft === 0) confirmBtn.classList.add('visible');
+                        else confirmBtn.classList.remove('visible');
+                    }
+
+                    stack.append(btnPlus, btnMinus);
+                    controls.append(countDisp, stack);
+                    row.append(label, controls);
+                    cBack.appendChild(row);
+                });
+                confirmBtn.onclick = () => {
+                    counts.forEach((c, i) => {
+                        if(c > 0) {
+                            let pts = c * 1; 
+                            let deltaTags = {}; deltaTags[node.items[i].tag] = pts;
+                            let deltaCauses = {}; deltaCauses[node.items[i].cause] = pts;
+                            addScore(deltaTags, deltaCauses);
+                        }
+                    });
+                    transitionToComment(node, charContainer);
+                };
+            }
+            else if (node.uiType === 'sliders') {
+                let values = new Array(node.items.length).fill(3);
+                node.items.forEach((item, i) => {
+                    let row = document.createElement('div');
+                    row.className = 'slider-row fade-in';
+                    row.style.animationDelay = `${i * 0.1}s`;
+                    row.innerHTML = `<div class="mb-1">${item.label}</div>`;
+                    
+                    let input = document.createElement('input');
+                    input.type = 'range'; input.min = 1; input.max = 5; input.value = 3;
+                    input.className = 'custom-range';
+                    input.oninput = (e) => values[i] = parseInt(e.target.value);
+                    row.appendChild(input);
+                    cBack.appendChild(row);
+                });
+                confirmBtn.classList.add('visible');
+                confirmBtn.onclick = () => {
+                    values.forEach((v, i) => {
+                        let pts = (v - 3);
+                        if(pts > 0) { let t={}; t[node.items[i].tagPlus] = pts; addScore(t, null); }
+                        else if(pts < 0) { let t={}; t[node.items[i].tagMinus] = Math.abs(pts); addScore(t, null); }
+                    });
+                    transitionToComment(node, charContainer);
+                };
+            }
+            else if (node.uiType === 'sort') {
+                let itemsList = [...node.items];
+                
+                const renderList = () => {
+                    cBack.innerHTML = '';
+                    itemsList.forEach((item, i) => {
+                        let row = document.createElement('div');
+                        row.className = 'sort-item fade-in';
+                        
+                        let label = document.createElement('span');
+                        label.innerText = item.label;
+                        label.className = 'pr-2';
+                        
+                        let controls = document.createElement('div');
+                        controls.className = 'sort-controls';
+                        
+                        if(i > 0) {
+                            let up = document.createElement('div');
+                            up.className = 'sort-btn'; up.innerHTML = '▲';
+                            up.onclick = () => {
+                                [itemsList[i-1], itemsList[i]] = [itemsList[i], itemsList[i-1]];
+                                renderList();
+                            };
+                            controls.appendChild(up);
+                        }
+                        if(i < itemsList.length -1) {
+                            let down = document.createElement('div');
+                            down.className = 'sort-btn'; down.innerHTML = '▼';
+                            down.onclick = () => {
+                                [itemsList[i], itemsList[i+1]] = [itemsList[i+1], itemsList[i]];
+                                renderList();
+                            };
+                            controls.appendChild(down);
+                        }
+                        
+                        row.append(label, controls);
+                        cBack.appendChild(row);
+                    });
+                };
+                renderList();
+                confirmBtn.classList.add('visible');
+                confirmBtn.onclick = () => {
+                    itemsList.forEach((item, i) => {
+                        let pts = (i - 2); 
+                        let t = {}; t[item.tag] = pts;
+                        addScore(t, null);
+                    });
+                    transitionToComment(node, charContainer);
+                };
+            }
+            else if (node.uiType === 'multi') {
+                let grid = document.createElement('div');
+                grid.className = 'multi-grid fade-in';
+                let selectedItems = [];
+                
+                node.items.forEach((item, i) => {
+                    let btn = document.createElement('div');
+                    btn.className = 'multi-item';
+                    btn.innerText = item.label;
+                    btn.onclick = () => {
+                        if(btn.classList.contains('selected')) {
+                            btn.classList.remove('selected');
+                            selectedItems = selectedItems.filter(s => s !== item);
+                        } else {
+                            if(selectedItems.length < 3) {
+                                btn.classList.add('selected');
+                                selectedItems.push(item);
+                            }
+                        }
+                        if(selectedItems.length > 0) confirmBtn.classList.add('visible');
+                        else confirmBtn.classList.remove('visible');
+                    };
+                    grid.appendChild(btn);
+                });
+                cBack.appendChild(grid);
+                confirmBtn.onclick = () => {
+                    selectedItems.forEach(item => {
+                        let t = {}; t[item.tag] = 2;
+                        let c = {}; c[item.cause] = 2;
+                        addScore(t, c);
+                    });
+                    transitionToComment(node, charContainer);
+                };
+            }
+            else if (node.uiType === 'swipe') {
+                let currentCard = 0;
+                let choices = [];
+                
+                const showCard = async () => {
+                    cBack.innerHTML = '';
+                    let txt = document.createElement('div');
+                    txt.className = 'quiz-swipe-text fade-in';
+                    txt.innerText = node.cards[currentCard].text;
+                    cBack.appendChild(txt);
+                    
+                    let optsRow = document.createElement('div');
+                    optsRow.className = 'quiz-swipe-row fade-in';
+                    ['Discordo', 'Depende', 'Concordo'].forEach((opt, idx) => {
+                        let btn = document.createElement('div');
+                        btn.className = 'quiz-swipe-option bg-white/20 cursor-pointer hover:bg-[#e64771] transition-colors uppercase';
+                        btn.innerText = opt;
+                        btn.onclick = () => {
+                            choices[currentCard] = idx;
+                            if(currentCard === 0) {
+                                currentCard++;
+                                showCard();
+                            } else {
+                                confirmBtn.classList.add('visible');
+                            }
+                        };
+                        optsRow.appendChild(btn);
+                    });
+                    cBack.appendChild(optsRow);
+                };
+                showCard();
+                confirmBtn.onclick = () => {
+                    choices.forEach((choice, i) => {
+                        if(choice === 2) addScore(node.cards[i].tagsYes, null);
+                        if(choice === 0) addScore(node.cards[i].tagsNo, null);
+                    });
+                    transitionToComment(node, charContainer);
+                };
+            }
+            
+            aBack.appendChild(confirmBtn);
+        }
+
+        async function transitionToComment(node, charContainer) {
+            const aBack = document.getElementById('action-back');
+            aBack.innerHTML = ''; 
+
+            const cFront = document.getElementById('content-front');
+            const aFront = document.getElementById('action-front');
+            cFront.innerHTML = '';
+            cFront.className = 'type-content comment-text'; 
+            aFront.innerHTML = '';
+
+            if (node.id === 'NPC9') cardContainer.classList.remove('npc9-layout');
+
+            cardFlipper.style.transform = 'rotateY(360deg)';
+            await sleep(config.flipDur);
+            document.getElementById('content-back').innerHTML = ''; 
+
+            await typeWriter(node.comment, cFront);
+
+            const arrow2 = document.createElement('div');
+            arrow2.className = 'btn-arrow fade-in';
+            arrow2.innerHTML = `<svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+            arrow2.onclick = () => closeInteraction(node, charContainer);
+            aFront.appendChild(arrow2);
+        }
+
+        async function closeInteraction(node, charContainer) {
+            cardContainer.classList.remove('active');
+            cardContainer.classList.remove('npc9-layout');
+            
+            setTimeout(() => {
+                document.getElementById('content-front').innerHTML = '';
+                document.getElementById('action-front').innerHTML = '';
+                document.getElementById('content-back').innerHTML = '';
+                document.getElementById('action-back').innerHTML = '';
+            }, 400);
+
+            await sleep(200);
+
+            const startLocX = node.mapPoint.x - (activeFrame * 100);
+            charContainer.style.top = `${node.mapPoint.y}%`;
+            charContainer.style.bottom = 'auto'; 
+            charContainer.style.left = `${startLocX}%`;
+            
+            charContainer.style.width = node.type === 'item' ? '75%' : '75%';
+            charContainer.style.transform = `translate(-50%, -50%) scale(0.7)`;
+            charContainer.style.opacity = '0';
+            
+            const shadow = charContainer.querySelector('.npc-shadow');
+            if(shadow) shadow.style.opacity = '0';
+
+            scrim.style.opacity = '0';
+            scrim.style.pointerEvents = 'none';
+
+            await sleep(1100); // Saída mais suave (+30%)
+            charContainer.remove(); 
+            
+            await sleep(200);
+
+            cardFlipper.style.transition = 'none';
+            cardFlipper.style.transform = 'rotateY(0deg)';
+            void cardFlipper.offsetWidth; 
+            cardFlipper.style.transition = `transform ${config.flipDur}ms ease-in-out`;
+            document.getElementById('content-front').className = 'type-content question-text';
+
+            currentRouteIdx++;
+            if(currentRouteIdx < routes.length) {
+                playRoute(currentRouteIdx);
+            }
+        }
+
+        // ----------------------------------------------------
+        // TELA FINAL E LÓGICA DE HASHTAGS
+        // ----------------------------------------------------
+        async function openFinalInteraction(node) {
+            const container = document.createElement('div');
+            container.className = `npc-sprite z-[60]`;
+            const startLocX = node.mapPoint.x - (activeFrame * 100);
+            
+            container.style.left = `${startLocX}%`;
+            container.style.top = `${node.mapPoint.y}%`;
+            container.style.width = `10%`; 
+            container.style.transform = `translate(-50%, -50%) scale(0.1)`;
+            container.style.opacity = '0';
+            
+            const img = document.createElement('img');
+            img.src = node.asset;
+            container.style.width = '60%';
+            img.className = `w-full h-auto drop-shadow-lg item-idle-anim`;
+            
+            container.appendChild(img);
+            npcLayer.appendChild(container);
+
+            void container.offsetWidth;
+
+            container.style.top = 'auto';
+            container.style.bottom = '0%';
+            container.style.left = '50%';
+            container.style.transform = `translate(-50%, 5%) scale(1)`;
+            container.style.opacity = '1';
+
+            await sleep(1500); 
+
+            document.getElementById('game-container').style.background = '#000';
+            bgLayers.forEach(bg => bg.style.opacity = '0');
+            const topHeader = document.getElementById('top-header');
+            if(topHeader) topHeader.style.opacity = '0';
+            marker.style.opacity = '0';
+            container.style.opacity = '0';
+
+            await sleep(800);
+            
+            const resultScreen = document.getElementById('result-screen');
+            resultScreen.classList.remove('hidden');
+            void resultScreen.offsetWidth;
+            resultScreen.style.opacity = '1';
+            resultScreen.style.pointerEvents = 'auto';
+            
+            document.getElementById('loading-state').style.display = 'flex';
+            document.getElementById('btn-restart').classList.add('hidden');
+
+            const ALL_TAGS = ['#educação','#impacto','#cidadania','#humanidade','#proximidade','#animais','#meioambiente','#comunidade','#saúde','#inclusão','#organização','#flexibilidade','#constância','#aprendizado','#bastidores','#acolhimento','#bairro','#tecnologia','#eventos','#autonomia'];
+            const tagCloud = document.getElementById('tagCloud');
+            tagCloud.innerHTML = '';
+            
+            ALL_TAGS.forEach(tag => {
+                let el = document.createElement('div');
+                el.className = 'tag'; el.innerText = tag;
+                tagCloud.appendChild(el);
+            });
+
+            let elapsed = 0;
+            const bar = document.getElementById('loadingBar');
+            
+            const timer = setInterval(() => {
+                elapsed += 100;
+                bar.style.width = Math.min(100, elapsed/100) + '%';
+                
+                if(elapsed < 4000) {
+                    [...tagCloud.children].sort(() => Math.random() - 0.5).forEach(n => tagCloud.appendChild(n));
+                }
+                
+                if(elapsed === 4000) {
+                    document.getElementById('affinityLabels').style.opacity = '1';
+                    document.getElementById('analysisLead').innerText = "Você colocou mais peso em:";
+                    
+                    const orderedTags = Object.entries(userScores.tags).sort((a,b) => b[1] - a[1]);
+                    const top3 = orderedTags.slice(0, 3).map(x => x[0]);
+                    const bottom3 = orderedTags.slice(-3).map(x => x[0]);
+
+                    [...tagCloud.children].forEach(el => {
+                        if(top3.includes(el.innerText)) {
+                            el.className = 'tag hash-plus';
+                        } else if(bottom3.includes(el.innerText)) {
+                            el.className = 'tag hash-minus';
+                        } else {
+                            el.className = 'tag hash-dim'; // Apaga as outras
+                        }
+                    });
+                }
+                
+                if(elapsed >= 10000) {
+                    clearInterval(timer);
+                    document.getElementById('btn-continue-final').classList.add('show');
+                }
+            }, 100);
+
+            document.getElementById('btn-continue-final').onclick = () => {
+                document.getElementById('loading-state').style.display = 'none';
+
+                const linksState = document.getElementById('links-state');
+                linksState.style.paddingTop = '';
+                linksState.style.display = 'flex';
+
+                // O primeiro texto começa exatamente na altura em que o box verde
+                // começava no layout original desta tela. Todo o restante desce junto.
+                const resultCauseCard = linksState.querySelector('.causeCard');
+                if (resultCauseCard) {
+                    const linksTop = linksState.getBoundingClientRect().top;
+                    const oldCauseTop = resultCauseCard.getBoundingClientRect().top - linksTop;
+                    linksState.style.paddingTop = `${oldCauseTop}px`;
+                }
+
+                document.getElementById('btn-restart').classList.remove('hidden');
+                
+                const orderedCauses = Object.entries(userScores.causes).sort((a,b) => b[1].score - a[1].score);
+                const bestCauseName = orderedCauses[0][0];
+                const bestCauseUrl = orderedCauses[0][1].url;
+                
+                document.getElementById('causeName').innerText = bestCauseName;
+                
+                const causeBtn = document.getElementById('causeBtn');
+                causeBtn.onclick = () => { window.open(bestCauseUrl, '_blank', 'noopener'); };
+
+                const bonusBtn = document.getElementById('bonusBtn');
+                bonusBtn.onclick = () => {
+                    const a = document.createElement('a');
+                    a.href = 'https://drive.google.com/uc?export=download&id=1m62UA-gJHlKhsbHMU5t2oRxv05eZifQ1';
+                    a.target = '_blank';
+                    a.rel = 'noopener';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+
+                    bonusBtn.innerText = 'BÔNUS SALVO';
+                    document.getElementById('bonusStatus').innerText = 'Agora você pode abrir sua indicação.';
+                    causeBtn.classList.add('enabled');
+                };
+            };
+        }
+
+
+        // ----------------------------------------------------
+        // SAIR DO JOGO
+        // ----------------------------------------------------
+        const exitGameButton = document.getElementById('btn-exit-game');
+        const exitConfirmOverlay = document.getElementById('exit-confirm-overlay');
+        const exitConfirmNo = document.getElementById('exit-confirm-no');
+        const exitConfirmYes = document.getElementById('exit-confirm-yes');
+
+        function closeExitConfirm() {
+            exitConfirmOverlay.classList.remove('open');
+            exitConfirmOverlay.setAttribute('aria-hidden', 'true');
+        }
+
+        exitGameButton.addEventListener('click', () => {
+            exitConfirmOverlay.classList.add('open');
+            exitConfirmOverlay.setAttribute('aria-hidden', 'false');
+        });
+
+        exitConfirmNo.addEventListener('click', () => {
+            closeExitConfirm();
+        });
+
+        exitConfirmYes.addEventListener('click', () => {
+            try { gameAudio.pause(); } catch (e) {}
+
+            try { window.close(); } catch (e) {}
+
+            setTimeout(() => {
+                if (!window.closed) {
+                    if (window.history.length > 1) {
+                        window.history.back();
+                    } else {
+                        window.location.replace('about:blank');
+                    }
+                }
+            }, 120);
+        });
+
+        // Botão Refazer
+        document.getElementById('btn-restart').onclick = () => {
+            window.location.reload();
+        };
+
+        // ----------------------------------------------------
+        // ABERTURA + ÁUDIO DO JOGO
+        // ----------------------------------------------------
+        const introScreen = document.getElementById('intro-screen');
+        const introClickLayer = document.getElementById('intro-click-layer');
+        const introVideo = document.getElementById('intro-video');
+        const secondIntroVideo = document.getElementById('intro-video-2');
+        const gameAudio = document.getElementById('game-audio');
+        const audioControl = document.getElementById('audio-control');
+        const audioToggle = document.getElementById('audio-toggle');
+        const audioPanel = document.getElementById('audio-panel');
+        const volumeDown = document.getElementById('volume-down');
+        const volumeUp = document.getElementById('volume-up');
+        const audioStop = document.getElementById('audio-stop');
+        const volumeValue = document.getElementById('volume-value');
+        const startIntroOverlay = document.getElementById('start-intro-overlay');
+        const startIntroText = document.getElementById('start-intro-text');
+        const startIntroArrow = document.getElementById('start-intro-arrow');
+
+        const startIntroCopy = `Talvez você já saiba onde quer ajudar.
+Ou o que deseja fazer.
+Então esqueça a resposta mais bonita, aqui não há certo ou errado.
+Neste quiz, iremos apenas apontar um caminho pra te ajudar a decidir por onde começar.`;
+
+        let introStage = 1;
+        let introReadyForClick = false;
+        let gameStarted = false;
+        gameAudio.volume = 0.7;
+
+        // O vídeo 2 já começa a carregar enquanto a tela 1 está rodando.
+        // Ao receber dados, mantemos o primeiro quadro pronto por baixo da tela 1.
+        secondIntroVideo.load();
+        secondIntroVideo.addEventListener('loadeddata', () => {
+            if (introStage === 1) {
+                secondIntroVideo.pause();
+                try { secondIntroVideo.currentTime = 0.01; } catch (e) {}
+            }
+        }, { once: true });
+
+        function updateAudioUI() {
+            volumeValue.innerText = `${Math.round(gameAudio.volume * 100)}%`;
+            const paused = gameAudio.paused;
+            audioStop.innerText = paused ? '▶' : '❚❚';
+            audioStop.setAttribute('aria-label', paused ? 'Retomar áudio' : 'Pausar áudio');
+        }
+
+        function setIntroReady(ready) {
+            introReadyForClick = ready;
+            introScreen.classList.toggle('ready', ready);
+        }
+
+        async function showStartIntro() {
+            activeCalibrationKey = 'START';
+            applyStartCalibration();
+            refreshCalibrationPanel();
+            startIntroText.innerHTML = '';
+            startIntroArrow.classList.remove('visible');
+            startIntroOverlay.classList.remove('leaving');
+            startIntroOverlay.classList.add('active');
+            startIntroOverlay.setAttribute('aria-hidden', 'false');
+
+            await sleep(450);
+            await typeWriter(startIntroCopy, startIntroText);
+            startIntroArrow.classList.add('visible');
+        }
+
+        startIntroArrow.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            if (!startIntroArrow.classList.contains('visible')) return;
+
+            startIntroArrow.classList.remove('visible');
+            startIntroOverlay.classList.add('leaving');
+            startIntroOverlay.setAttribute('aria-hidden', 'true');
+
+            await sleep(750);
+            startIntroOverlay.classList.remove('active', 'leaving');
+            startIntroOverlay.style.display = 'none';
+            playRoute(currentRouteIdx);
+        });
+
+        function startGameFromIntro() {
+            if (gameStarted) return;
+            gameStarted = true;
+            setIntroReady(false);
+            introScreen.classList.add('leaving');
+
+            setTimeout(() => {
+                introScreen.style.display = 'none';
+
+                // A trilha em looping começa somente quando o mapa do jogo aparece.
+                gameAudio.play().catch(() => {});
+                audioControl.style.display = 'flex';
+                updateAudioUI();
+
+                // Antes da peça se mover, apresenta a introdução no ponto START.
+                setTimeout(() => { showStartIntro(); }, 350);
+            }, 800);
+        }
+
+        introVideo.addEventListener('timeupdate', () => {
+            // Na primeira tela, o clique só é liberado depois de 5 segundos.
+            if (introStage === 1 && introVideo.currentTime >= 5) {
+                introVideo.pause();
+                introVideo.currentTime = 5;
+                setIntroReady(true);
+            }
+        });
+
+        function markSecondIntroFinished() {
+            if (introStage !== 2) return;
+            introStage = 3;
+            setIntroReady(true);
+        }
+
+        secondIntroVideo.addEventListener('ended', markSecondIntroFinished);
+
+        // Alguns navegadores/previews não disparam `ended` de forma consistente
+        // em vídeos sem controles. Este fallback apenas confirma que o playhead
+        // realmente chegou ao final antes de liberar o clique para o mapa.
+        secondIntroVideo.addEventListener('timeupdate', () => {
+            const duration = secondIntroVideo.duration;
+            if (introStage === 2 && Number.isFinite(duration) && duration > 0 &&
+                secondIntroVideo.currentTime >= duration - 0.08) {
+                markSecondIntroFinished();
+            }
+        });
+
+        function handleIntroClick() {
+            if (!introReadyForClick) return;
+
+            if (introStage === 1) {
+                introStage = 2;
+                setIntroReady(false);
+
+                // Mostra imediatamente o primeiro quadro já pré-carregado do vídeo 2.
+                // A reprodução começa no próprio gesto do usuário para manter o áudio.
+                introVideo.pause();
+                introVideo.classList.add('video-1-hidden');
+                secondIntroVideo.loop = false;
+                secondIntroVideo.defaultMuted = false;
+                secondIntroVideo.muted = false;
+
+                const playPromise = secondIntroVideo.play();
+                if (playPromise && typeof playPromise.catch === 'function') {
+                    playPromise.catch(() => {
+                        // Se o preview bloquear o primeiro play, deixamos a tela 2 pronta
+                        // para uma nova tentativa de toque, sem avançar indevidamente ao mapa.
+                        setIntroReady(true);
+                    });
+                }
+                return;
+            }
+
+            // Caso um preview tenha bloqueado a primeira tentativa de tocar o vídeo 2,
+            // um novo toque tenta reproduzi-lo novamente com áudio.
+            if (introStage === 2 && secondIntroVideo.paused && !secondIntroVideo.ended) {
+                setIntroReady(false);
+                secondIntroVideo.muted = false;
+                secondIntroVideo.play().catch(() => setIntroReady(true));
+                return;
+            }
+
+            if (introStage === 3) {
+                startGameFromIntro();
+            }
+        }
+
+        introClickLayer.addEventListener('click', handleIntroClick);
+
+        audioToggle.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const open = !audioPanel.classList.contains('open');
+            audioPanel.classList.toggle('open', open);
+            audioPanel.setAttribute('aria-hidden', String(!open));
+            audioToggle.setAttribute('aria-expanded', String(open));
+        });
+
+        audioPanel.addEventListener('click', (event) => event.stopPropagation());
+
+        volumeDown.addEventListener('click', () => {
+            gameAudio.volume = Math.max(0, Math.round((gameAudio.volume - 0.1) * 10) / 10);
+            updateAudioUI();
+        });
+
+        volumeUp.addEventListener('click', () => {
+            gameAudio.volume = Math.min(1, Math.round((gameAudio.volume + 0.1) * 10) / 10);
+            updateAudioUI();
+        });
+
+        audioStop.addEventListener('click', () => {
+            if (gameAudio.paused) {
+                gameAudio.play().catch(() => {});
+            } else {
+                gameAudio.pause();
+            }
+            updateAudioUI();
+        });
+
+        document.addEventListener('click', () => {
+            if (!audioPanel.classList.contains('open')) return;
+            audioPanel.classList.remove('open');
+            audioPanel.setAttribute('aria-hidden', 'true');
+            audioToggle.setAttribute('aria-expanded', 'false');
+        });
+
+
+
+        // ----------------------------------------------------
+        // PAINEL DE CALIBRAÇÃO VISUAL
+        // Abra o arquivo/site acrescentando ?calibrar=1 na URL.
+        // Ex.: jogo.html?calibrar=1
+        // ----------------------------------------------------
+        const calibrationMode = new URLSearchParams(window.location.search).get('calibrar') === '1';
+        if (calibrationMode) {
+            document.body.classList.add('calibration-mode');
+            const calToggle = document.getElementById('calibration-toggle');
+            const calPanel = document.getElementById('calibration-panel');
+            const calText = document.getElementById('cal-text');
+            const calWidth = document.getElementById('cal-width');
+            const calHeight = document.getElementById('cal-height');
+            const calTop = document.getElementById('cal-top');
+
+            calToggle.addEventListener('click', (event) => {
+                event.stopPropagation();
+                const open = !calPanel.classList.contains('open');
+                calPanel.classList.toggle('open', open);
+                calPanel.setAttribute('aria-hidden', String(!open));
+                refreshCalibrationPanel();
+            });
+            calPanel.addEventListener('click', event => event.stopPropagation());
+
+            function updateCalibrationField(field, value) {
+                calibrationOverrides[activeCalibrationKey] = {
+                    ...getCalibration(activeCalibrationKey),
+                    [field]: Number(value)
+                };
+                saveCalibration();
+                applyCalibrationToVisibleKey();
+            }
+
+            calText.addEventListener('input', () => updateCalibrationField('texto', calText.value));
+            calWidth.addEventListener('input', () => updateCalibrationField('larguraBox', calWidth.value));
+            calHeight.addEventListener('input', () => updateCalibrationField('alturaBox', calHeight.value));
+            calTop.addEventListener('input', () => updateCalibrationField('topoBox', calTop.value));
+
+            document.getElementById('cal-reset').addEventListener('click', () => {
+                delete calibrationOverrides[activeCalibrationKey];
+                saveCalibration();
+                applyCalibrationToVisibleKey();
+            });
+
+            document.getElementById('cal-apply-all').addEventListener('click', () => {
+                const current = getCalibration(activeCalibrationKey);
+                Object.keys(CALIBRACAO_ETAPAS).forEach(key => {
+                    // A introdução START usa altura automática e geometria própria.
+                    // Se a origem também for START, espalhamos somente a escala de texto.
+                    if (key === 'START' || activeCalibrationKey === 'START') {
+                        calibrationOverrides[key] = { ...getCalibration(key), texto: current.texto };
+                    } else {
+                        calibrationOverrides[key] = {
+                            ...getCalibration(key),
+                            texto: current.texto,
+                            larguraBox: current.larguraBox,
+                            alturaBox: current.alturaBox,
+                            topoBox: current.topoBox
+                        };
+                    }
+                });
+                saveCalibration();
+                applyCalibrationToVisibleKey();
+            });
+
+            refreshCalibrationPanel();
+        }
+
+        window.onload = () => {
+            updateAudioUI();
+            introVideo.currentTime = 0;
+            introVideo.play().catch(() => {});
+        };
+    </script>
+
+    <script>
+        /* =========================================================
+           BLINDAGEM FINAL DE VIEWPORT
+           - base fixa 390 x 693.333
+           - nunca amplia acima de 1:1
+           - reduz só quando necessário para aparecer inteiro
+           - escala calculada uma única vez por carregamento
+           ========================================================= */
+        (() => {
+            const BASE_W = 390;
+            const BASE_H = 693.333;
+            const game = document.getElementById('game-container');
+
+            function getStableViewport() {
+                const width = Math.max(
+                    1,
+                    document.documentElement.clientWidth || window.innerWidth || BASE_W
+                );
+
+                // 100svh é usado no body para evitar deslocamento quando
+                // barras móveis do navegador aparecem/desaparecem.
+                const probe = document.createElement('div');
+                probe.style.cssText =
+                    'position:fixed;left:-9999px;top:-9999px;width:1px;height:100svh;pointer-events:none;';
+                document.body.appendChild(probe);
+                const stableHeight = probe.getBoundingClientRect().height;
+                probe.remove();
+
+                const height = Math.max(
+                    1,
+                    stableHeight || document.documentElement.clientHeight || window.innerHeight || BASE_H
+                );
+
+                return { width, height };
+            }
+
+            const viewport = getStableViewport();
+            const lockedScale = Math.min(
+                1,
+                viewport.width / BASE_W,
+                viewport.height / BASE_H
+            );
+
+            game.style.setProperty('--naboa-viewport-scale', String(lockedScale));
+            game.dataset.viewportScale = lockedScale.toFixed(6);
+
+            // Evita zoom por Ctrl/Cmd + roda do mouse.
+            window.addEventListener('wheel', (event) => {
+                if (event.ctrlKey || event.metaKey) event.preventDefault();
+            }, { passive: false });
+
+            // Evita atalhos usuais de zoom do navegador durante o jogo.
+            window.addEventListener('keydown', (event) => {
+                if (!(event.ctrlKey || event.metaKey)) return;
+                if (['+', '=', '-', '0'].includes(event.key)) {
+                    event.preventDefault();
+                }
+            }, { passive: false });
+
+            // Safari/iOS: bloqueia gestos de pinça quando suportados.
+            ['gesturestart', 'gesturechange', 'gestureend'].forEach((type) => {
+                document.addEventListener(type, (event) => event.preventDefault(), { passive: false });
+            });
+
+            // Impede arrastar imagens/elementos para fora do jogo.
+            document.addEventListener('dragstart', (event) => {
+                if (game.contains(event.target)) event.preventDefault();
+            });
+        })();
+    </script>
+
+</body>
+</html>
