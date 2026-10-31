@@ -2363,6 +2363,20 @@ Neste quiz, iremos apenas apontar um caminho pra te ajudar a decidir por onde co
         });
 
         function handleIntroClick() {
+            // iPhone/Safari pode bloquear o autoplay. Como a camada de toque
+            // fica sobre o vídeo, iniciamos a reprodução manualmente neste gesto.
+            if (introStage === 1 && !introReadyForClick) {
+                if (introVideo.paused) {
+                    const firstPlayPromise = introVideo.play();
+                    if (firstPlayPromise && typeof firstPlayPromise.catch === 'function') {
+                        firstPlayPromise.catch(() => {
+                            // Mantém a tela disponível para uma nova tentativa de toque.
+                        });
+                    }
+                }
+                return;
+            }
+
             if (!introReadyForClick) return;
 
             if (introStage === 1) {
