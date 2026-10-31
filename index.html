@@ -3,6 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <!-- Prévia para compartilhamento (WhatsApp, Facebook etc.) -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="NABOA | Faça o quiz">
+    <meta property="og:description" content="Descubra como começar a transformar o mundo com o voluntariado.">
+    <meta property="og:image" content="https://raw.githubusercontent.com/portalnaboa/voluntariado/446aade14535ffbde5a51519967ca3abd26bd0bf/capa_fas%C3%A7a-o-quiz.webp">
+    <meta property="og:image:secure_url" content="https://raw.githubusercontent.com/portalnaboa/voluntariado/446aade14535ffbde5a51519967ca3abd26bd0bf/capa_fas%C3%A7a-o-quiz.webp">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:alt" content="NABOA | Faça o quiz">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NABOA | Faça o quiz">
+    <meta name="twitter:description" content="Descubra como começar a transformar o mundo com o voluntariado.">
+    <meta name="twitter:image" content="https://raw.githubusercontent.com/portalnaboa/voluntariado/446aade14535ffbde5a51519967ca3abd26bd0bf/capa_fas%C3%A7a-o-quiz.webp">
     <title>NABOA - Jogo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700;800&display=swap" rel="stylesheet">
@@ -417,13 +429,11 @@
             object-fit: cover;
             background: #000;
         }
-        #intro-video { z-index: 2; transition: opacity 3s ease-in-out; }
+        #intro-video { z-index: 2; }
         #intro-video-2 {
             z-index: 1;
-            opacity: 0;
-            transition: opacity 3s ease-in-out;
+            opacity: 1;
         }
-        #intro-video-2.video-2-visible { opacity: 1; }
         #intro-video.video-1-hidden {
             opacity: 0;
             pointer-events: none;
@@ -436,10 +446,10 @@
             transform: translateX(-50%);
             color: rgba(255,255,255,0.82);
             font-family: 'Montserrat', sans-serif;
-            font-size: 10px;
+            font-size: 7px;
             font-weight: 500;
-            letter-spacing: 0.06em;
-            text-transform: none;
+            letter-spacing: 0.12em;
+            text-transform: lowercase;
             white-space: nowrap;
             text-shadow: 0 1px 4px rgba(0,0,0,0.75);
             pointer-events: none;
@@ -957,7 +967,7 @@
             <video id="intro-video" autoplay muted playsinline preload="auto">
                 <source src="https://naboa.eco.br/wp-content/uploads/2026/08/invdeo-abertura.mp4" type="video/mp4">
             </video>
-            <div id="intro-credit">Criado por Wendell Soares</div>
+            <div id="intro-credit">criado por maestria geo</div>
             <!-- Camada transparente garante o clique sobre vídeos também em mobile/previews. -->
             <div id="intro-click-layer" aria-label="Avançar abertura"></div>
         </div>
@@ -2167,7 +2177,7 @@
                 const bonusBtn = document.getElementById('bonusBtn');
                 bonusBtn.onclick = () => {
                     const a = document.createElement('a');
-                    a.href = 'https://github.com/portalnaboa/voluntariado/raw/c22011d74abd1eab42acea9ea77d0216c17fe61a/Insights%20para%20voluntariado%20NABOA.pdf?download=1';
+                    a.href = 'https://drive.google.com/uc?export=download&id=1m62UA-gJHlKhsbHMU5t2oRxv05eZifQ1';
                     a.target = '_blank';
                     a.rel = 'noopener';
                     document.body.appendChild(a);
@@ -2252,7 +2262,7 @@ Neste quiz, iremos apenas apontar um caminho pra te ajudar a decidir por onde co
         let introStage = 1;
         let introReadyForClick = false;
         let gameStarted = false;
-        gameAudio.volume = 0.49;
+        gameAudio.volume = 0.7;
 
         // O vídeo 2 já começa a carregar enquanto a tela 1 está rodando.
         // Ao receber dados, mantemos o primeiro quadro pronto por baixo da tela 1.
@@ -2363,7 +2373,6 @@ Neste quiz, iremos apenas apontar um caminho pra te ajudar a decidir por onde co
                 // A reprodução começa no próprio gesto do usuário para manter o áudio.
                 introVideo.pause();
                 introVideo.classList.add('video-1-hidden');
-                secondIntroVideo.classList.add('video-2-visible');
                 secondIntroVideo.loop = false;
                 secondIntroVideo.defaultMuted = false;
                 secondIntroVideo.muted = false;
